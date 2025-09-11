@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>清除MySQL缓存</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .button {
+            background-color: #dc3545;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            width: 100%;
+        }
+        .button:hover {
+            background-color: #c82333;
+        }
+        .success {
+            background-color: #28a745;
+        }
+        .success:hover {
+            background-color: #218838;
+        }
+        .info {
+            background-color: #17a2b8;
+        }
+        .info:hover {
+            background-color: #138496;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .status.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .instructions {
+            background-color: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 清除MySQL缓存工具</h1>
+        
+        <div class="instructions">
+            <h3>📋 使用说明：</h3>
+            <p>这个工具可以帮助你清除前端页面的本地缓存，让页面重新从MySQL数据库获取最新数据。</p>
+            <ol>
+                <li>点击"清除所有缓存"按钮</li>
+                <li>返回你的应用页面</li>
+                <li>刷新页面或点击"刷新"按钮</li>
+                <li>页面将显示MySQL中的最新数据</li>
+            </ol>
+        </div>
+
+        <button class="button" onclick="clearAllCache()">🗑️ 清除所有缓存</button>
+        <button class="button info" onclick="checkCacheStatus()">🔍 检查缓存状态</button>
+        <button class="button success" onclick="goToApp()">🚀 返回应用</button>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        function clearAllCache() {
+            try {
+                // 清除localStorage
+                localStorage.clear();
+                
+                // 清除sessionStorage
+                sessionStorage.clear();
+                
+                // 清除IndexedDB（如果有的话）
+                if ('indexedDB' in window) {
+                    indexedDB.databases().then(databases => {
+                        databases.forEach(db => {
+                            indexedDB.deleteDatabase(db.name);
+                        });
+                    });
+                }
+                
+                showStatus('✅ 所有缓存已清除！现在可以返回应用页面刷新数据了。', 'success');
+                
+                // 显示清除的详细信息
+                setTimeout(() => {
+                    showStatus('📊 已清除的数据类型：<br>' +
+                              '• localStorage 数据<br>' +
+                              '• sessionStorage 数据<br>' +
+                              '• IndexedDB 数据<br>' +
+                              '• 页面缓存', 'success');
+                }, 2000);
+                
+            } catch (error) {
+                showStatus('❌ 清除缓存时出错：' + error.message, 'error');
+            }
+        }
+
+        function checkCacheStatus() {
+            try {
+                const localStorageKeys = Object.keys(localStorage);
+                const sessionStorageKeys = Object.keys(sessionStorage);
+                
+                let status = '📊 当前缓存状态：<br>';
+                status += `• localStorage: ${localStorageKeys.length} 项<br>`;
+                status += `• sessionStorage: ${sessionStorageKeys.length} 项<br>`;
+                
+                if (localStorageKeys.length > 0) {
+                    status += '<br>localStorage 中的键：<br>';
+                    localStorageKeys.forEach(key => {
+                        status += `  - ${key}<br>`;
+                    });
+                }
+                
+                showStatus(status, 'info');
+                
+            } catch (error) {
+                showStatus('❌ 检查缓存状态时出错：' + error.message, 'error');
+            }
+        }
+
+        function goToApp() {
+            // 尝试跳转到应用页面
+            const appUrls = [
+                'http://localhost:3000',
+                'http://localhost:8080',
+                'http://127.0.0.1:3000',
+                'http://127.0.0.1:8080'
+            ];
+            
+            // 先尝试3000端口（前端）
+            window.open('http://localhost:3000', '_blank');
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+            
+            // 5秒后自动隐藏
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 8000);
+        }
+
+        // 页面加载时检查缓存状态
+        window.onload = function() {
+            checkCacheStatus();
+        };
+    </script>
+</body>
+</html>
+
+
+

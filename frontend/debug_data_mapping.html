@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据映射调试工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .debug-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #495057;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .button.success {
+            background-color: #28a745;
+        }
+        .button.danger {
+            background-color: #dc3545;
+        }
+        .button.warning {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        .data-display {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .grid-display {
+            display: flex;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        .warehouse-grid {
+            flex: 1;
+        }
+        .grid-title {
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #495057;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 2px;
+            border: 2px solid #bdc3c7;
+            padding: 10px;
+            background-color: white;
+        }
+        .cell {
+            width: 80px;
+            height: 60px;
+            border: 1px solid #dee2e6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            text-align: center;
+            background-color: #f8f9fa;
+            position: relative;
+            cursor: pointer;
+        }
+        .cell:hover {
+            background-color: #e9ecef;
+        }
+        .cell.has-data {
+            background-color: #e8f5e8;
+            border-color: #27ae60;
+        }
+        .cell.coordinate {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            font-size: 8px;
+            color: #6c757d;
+        }
+        .cell-data {
+            font-size: 9px;
+            line-height: 1.1;
+        }
+        .pallet-code {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .material-code {
+            color: #3498db;
+        }
+        .highlight {
+            background-color: #fff3cd !important;
+            border-color: #ffc107 !important;
+        }
+        .error-cell {
+            background-color: #f8d7da !important;
+            border-color: #dc3545 !important;
+        }
+        .success-cell {
+            background-color: #d4edda !important;
+            border-color: #28a745 !important;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .log-info { background-color: #d1ecf1; }
+        .log-success { background-color: #d4edda; }
+        .log-warning { background-color: #fff3cd; }
+        .log-error { background-color: #f8d7da; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>数据映射调试工具</h1>
+        <p>此工具用于实时监控数据存储和读取过程，找出数据错位的原因。</p>
+        
+        <div class="debug-section">
+            <h3>1. 实时数据监控</h3>
+            <button class="button success" onclick="startMonitoring()">开始监控</button>
+            <button class="button warning" onclick="stopMonitoring()">停止监控</button>
+            <button class="button" onclick="clearLog()">清空日志</button>
+            <div id="monitorLog" class="data-display">点击"开始监控"开始实时监控数据变化</div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>2. 模拟数据操作</h3>
+            <button class="button success" onclick="simulateInbound()">模拟入库操作</button>
+            <button class="button" onclick="simulateOutbound()">模拟出库操作</button>
+            <button class="button danger" onclick="clearAllData()">清空所有数据</button>
+            <div id="operationLog" class="data-display">点击按钮模拟操作，观察数据变化</div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>3. 数据位置验证</h3>
+            <div class="grid-display">
+                <div class="warehouse-grid">
+                    <div class="grid-title">A库</div>
+                    <div id="gridA" class="grid"></div>
+                </div>
+                <div class="warehouse-grid">
+                    <div class="grid-title">B库</div>
+                    <div id="gridB" class="grid"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>4. 数据映射分析</h3>
+            <button class="button" onclick="analyzeDataMapping()">分析数据映射</button>
+            <button class="button" onclick="checkDataIntegrity()">检查数据完整性</button>
+            <div id="analysisLog" class="data-display">点击按钮分析数据映射问题</div>
+        </div>
+    </div>
+
+    <script>
+        let monitoring = false;
+        let monitorInterval;
+        let lastDataHash = '';
+        
+        // 日志函数
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('monitorLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        // 操作日志
+        function operationLog(message, type = 'info') {
+            const logDiv = document.getElementById('operationLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        // 分析日志
+        function analysisLog(message, type = 'info') {
+            const logDiv = document.getElementById('analysisLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        // 开始监控
+        function startMonitoring() {
+            if (monitoring) return;
+            
+            monitoring = true;
+            log('开始实时数据监控...', 'success');
+            
+            monitorInterval = setInterval(() => {
+                const currentData = localStorage.getItem('warehouseStatus');
+                const currentHash = currentData ? btoa(currentData).slice(0, 10) : 'empty';
+                
+                if (currentHash !== lastDataHash) {
+                    log(`检测到数据变化: ${lastDataHash} -> ${currentHash}`, 'warning');
+                    lastDataHash = currentHash;
+                    
+                    if (currentData) {
+                        try {
+                            const parsed = JSON.parse(currentData);
+                            log('数据变化详情:', 'info');
+                            
+                            Object.keys(parsed).forEach(warehouse => {
+                                if (parsed[warehouse] && parsed[warehouse].grid) {
+                                    const positions = Object.keys(parsed[warehouse].grid);
+                                    if (positions.length > 0) {
+                                        positions.forEach(pos => {
+                                            const cellData = parsed[warehouse].grid[pos];
+                                            log(`  ${warehouse}库${pos}: 托盘${cellData.palletCode}, 物料${cellData.materialCode}`, 'info');
+                                        });
+                                    }
+                                }
+                            });
+                        } catch (e) {
+                            log(`数据解析错误: ${e.message}`, 'error');
+                        }
+                    }
+                    
+                    refreshGrids();
+                }
+            }, 1000);
+            
+            log('监控已启动，每秒检查一次数据变化', 'success');
+        }
+        
+        // 停止监控
+        function stopMonitoring() {
+            if (!monitoring) return;
+            
+            monitoring = false;
+            clearInterval(monitorInterval);
+            log('监控已停止', 'warning');
+        }
+        
+        // 清空日志
+        function clearLog() {
+            document.getElementById('monitorLog').innerHTML = '';
+            document.getElementById('operationLog').innerHTML = '';
+            document.getElementById('analysisLog').innerHTML = '';
+        }
+        
+        // 模拟入库操作
+        function simulateInbound() {
+            operationLog('开始模拟入库操作...', 'info');
+            
+            // 获取当前数据
+            let warehouseStatus = {};
+            const stored = localStorage.getItem('warehouseStatus');
+            if (stored) {
+                try {
+                    warehouseStatus = JSON.parse(stored);
+                } catch (e) {
+                    operationLog(`解析现有数据失败: ${e.message}`, 'error');
+                    return;
+                }
+            }
+            
+            // 确保仓库结构存在
+            if (!warehouseStatus.A) warehouseStatus.A = { grid: {} };
+            if (!warehouseStatus.B) warehouseStatus.B = { grid: {} };
+            
+            // 模拟A库1-1入库
+            const keyA = '1-1';
+            warehouseStatus.A.grid[keyA] = {
+                hasPallet: true,
+                palletCode: 'P001',
+                materialCode: '1001',
+                materialStatus: 'RAW',
+                remarks: '模拟入库A库1-1'
+            };
+            operationLog(`准备存储A库${keyA}: 托盘P001, 物料1001`, 'info');
+            
+            // 模拟B库2-1入库
+            const keyB = '2-1';
+            warehouseStatus.B.grid[keyB] = {
+                hasPallet: true,
+                palletCode: 'P002',
+                materialCode: '1001',
+                materialStatus: 'RAW',
+                remarks: '模拟入库B库2-1'
+            };
+            operationLog(`准备存储B库${keyB}: 托盘P002, 物料1001`, 'info');
+            
+            // 保存到localStorage
+            try {
+                localStorage.setItem('warehouseStatus', JSON.stringify(warehouseStatus));
+                operationLog('数据已保存到localStorage', 'success');
+                
+                // 验证存储结果
+                const verification = localStorage.getItem('warehouseStatus');
+                if (verification) {
+                    const verified = JSON.parse(verification);
+                    operationLog('验证存储结果:', 'info');
+                    
+                    // 检查A库1-1
+                    const a11 = verified.A?.grid?.['1-1'];
+                    if (a11 && a11.palletCode === 'P001') {
+                        operationLog('✅ A库1-1存储成功', 'success');
+                    } else {
+                        operationLog('❌ A库1-1存储失败', 'error');
+                    }
+                    
+                    // 检查B库2-1
+                    const b21 = verified.B?.grid?.['2-1'];
+                    if (b21 && b21.palletCode === 'P002') {
+                        operationLog('✅ B库2-1存储成功', 'success');
+                    } else {
+                        operationLog('❌ B库2-1存储失败', 'error');
+                    }
+                }
+                
+                refreshGrids();
+                
+            } catch (e) {
+                operationLog(`保存失败: ${e.message}`, 'error');
+            }
+        }
+        
+        // 模拟出库操作
+        function simulateOutbound() {
+            operationLog('开始模拟出库操作...', 'info');
+            
+            const stored = localStorage.getItem('warehouseStatus');
+            if (!stored) {
+                operationLog('没有数据可以出库', 'warning');
+                return;
+            }
+            
+            try {
+                const warehouseStatus = JSON.parse(stored);
+                
+                // 模拟出库A库1-1
+                if (warehouseStatus.A?.grid?.['1-1']) {
+                    delete warehouseStatus.A.grid['1-1'];
+                    operationLog('已出库A库1-1', 'info');
+                }
+                
+                // 模拟出库B库2-1
+                if (warehouseStatus.B?.grid?.['2-1']) {
+                    delete warehouseStatus.B.grid['2-1'];
+                    operationLog('已出库B库2-1', 'info');
+                }
+                
+                localStorage.setItem('warehouseStatus', JSON.stringify(warehouseStatus));
+                operationLog('出库操作完成', 'success');
+                refreshGrids();
+                
+            } catch (e) {
+                operationLog(`出库操作失败: ${e.message}`, 'error');
+            }
+        }
+        
+        // 清空所有数据
+        function clearAllData() {
+            localStorage.removeItem('warehouseStatus');
+            operationLog('所有数据已清空', 'warning');
+            refreshGrids();
+        }
+        
+        // 刷新网格显示
+        function refreshGrids() {
+            const gridA = document.getElementById('gridA');
+            const gridB = document.getElementById('gridB');
+            
+            // 清空网格
+            gridA.innerHTML = '';
+            gridB.innerHTML = '';
+            
+            // 获取数据
+            const stored = localStorage.getItem('warehouseStatus');
+            if (stored) {
+                try {
+                    const data = JSON.parse(stored);
+                    
+                    // 创建A库网格
+                    for (let row = 1; row <= 4; row++) {
+                        for (let col = 1; col <= 6; col++) {
+                            const cell = document.createElement('div');
+                            const key = `${row}-${col}`;
+                            const cellData = data.A?.grid?.[key];
+                            
+                            cell.className = 'cell';
+                            if (cellData && cellData.hasPallet) {
+                                cell.className += ' has-data';
+                                cell.innerHTML = `
+                                    <div class="coordinate">${row}-${col}</div>
+                                    <div class="cell-data">
+                                        <div class="pallet-code">${cellData.palletCode}</div>
+                                        <div class="material-code">${cellData.materialCode}</div>
+                                    </div>
+                                `;
+                                
+                                // 添加点击事件显示详细信息
+                                cell.onclick = () => showCellDetails('A', row, col, cellData);
+                            } else {
+                                cell.innerHTML = `<div class="coordinate">${row}-${col}</div>`;
+                                cell.onclick = () => showCellDetails('A', row, col, null);
+                            }
+                            gridA.appendChild(cell);
+                        }
+                    }
+                    
+                    // 创建B库网格
+                    for (let row = 1; row <= 4; row++) {
+                        for (let col = 1; col <= 6; col++) {
+                            const cell = document.createElement('div');
+                            const key = `${row}-${col}`;
+                            const cellData = data.B?.grid?.[key];
+                            
+                            cell.className = 'cell';
+                            if (cellData && cellData.hasPallet) {
+                                cell.className += ' has-data';
+                                cell.innerHTML = `
+                                    <div class="coordinate">${row}-${col}</div>
+                                    <div class="cell-data">
+                                        <div class="pallet-code">${cellData.palletCode}</div>
+                                        <div class="material-code">${cellData.materialCode}</div>
+                                    </div>
+                                `;
+                                
+                                // 添加点击事件显示详细信息
+                                cell.onclick = () => showCellDetails('B', row, col, cellData);
+                            } else {
+                                cell.innerHTML = `<div class="coordinate">${row}-${col}</div>`;
+                                cell.onclick = () => showCellDetails('B', row, col, null);
+                            }
+                            gridB.appendChild(cell);
+                        }
+                    }
+                } catch (e) {
+                    console.error('网格刷新失败:', e);
+                }
+            }
+        }
+        
+        // 显示单元格详情
+        function showCellDetails(warehouse, row, col, cellData) {
+            const key = `${row}-${col}`;
+            if (cellData) {
+                log(`点击${warehouse}库${key}: 托盘${cellData.palletCode}, 物料${cellData.materialCode}`, 'info');
+            } else {
+                log(`点击${warehouse}库${key}: 无数据`, 'info');
+            }
+        }
+        
+        // 分析数据映射
+        function analyzeDataMapping() {
+            analysisLog('开始分析数据映射...', 'info');
+            
+            const stored = localStorage.getItem('warehouseStatus');
+            if (!stored) {
+                analysisLog('没有数据可以分析', 'warning');
+                return;
+            }
+            
+            try {
+                const data = JSON.parse(stored);
+                analysisLog('数据结构分析:', 'info');
+                
+                Object.keys(data).forEach(warehouse => {
+                    analysisLog(`${warehouse}库分析:`, 'info');
+                    
+                    if (data[warehouse] && data[warehouse].grid) {
+                        const positions = Object.keys(data[warehouse].grid);
+                        analysisLog(`  网格位置数量: ${positions.length}`, 'info');
+                        
+                        positions.forEach(pos => {
+                            const cellData = data[warehouse].grid[pos];
+                            analysisLog(`    位置${pos}:`, 'info');
+                            analysisLog(`      键值类型: ${typeof pos}`, 'info');
+                            analysisLog(`      键值内容: "${pos}"`, 'info');
+                            analysisLog(`      数据: 托盘${cellData.palletCode}, 物料${cellData.materialCode}`, 'info');
+                            
+                            // 检查键值格式
+                            if (pos.includes('-')) {
+                                const [row, col] = pos.split('-');
+                                analysisLog(`      解析结果: 行=${row}, 列=${col}`, 'info');
+                                
+                                // 验证键值是否正确
+                                if (row >= 1 && row <= 4 && col >= 1 && col <= 6) {
+                                    analysisLog(`      ✅ 键值格式正确`, 'success');
+                                } else {
+                                    analysisLog(`      ❌ 键值格式错误: 行或列超出范围`, 'error');
+                                }
+                            } else {
+                                analysisLog(`      ❌ 键值格式错误: 不包含分隔符"-"`, 'error');
+                            }
+                        });
+                    } else {
+                        analysisLog(`  无网格数据`, 'warning');
+                    }
+                });
+                
+            } catch (e) {
+                analysisLog(`分析失败: ${e.message}`, 'error');
+            }
+        }
+        
+        // 检查数据完整性
+        function checkDataIntegrity() {
+            analysisLog('开始检查数据完整性...', 'info');
+            
+            const stored = localStorage.getItem('warehouseStatus');
+            if (!stored) {
+                analysisLog('没有数据可以检查', 'warning');
+                return;
+            }
+            
+            try {
+                const data = JSON.parse(stored);
+                let issues = [];
+                
+                Object.keys(data).forEach(warehouse => {
+                    if (data[warehouse] && data[warehouse].grid) {
+                        Object.keys(data[warehouse].grid).forEach(pos => {
+                            const cellData = data[warehouse].grid[pos];
+                            
+                            // 检查必要字段
+                            if (!cellData.hasPallet) issues.push(`${warehouse}库${pos}: 缺少hasPallet字段`);
+                            if (!cellData.palletCode) issues.push(`${warehouse}库${pos}: 缺少palletCode字段`);
+                            if (!cellData.materialCode) issues.push(`${warehouse}库${pos}: 缺少materialCode字段`);
+                            
+                            // 检查数据类型
+                            if (typeof cellData.hasPallet !== 'boolean') issues.push(`${warehouse}库${pos}: hasPallet类型错误`);
+                            if (typeof cellData.palletCode !== 'string') issues.push(`${warehouse}库${pos}: palletCode类型错误`);
+                            if (typeof cellData.materialCode !== 'string') issues.push(`${warehouse}库${pos}: materialCode类型错误`);
+                        });
+                    }
+                });
+                
+                if (issues.length === 0) {
+                    analysisLog('✅ 数据完整性检查通过', 'success');
+                } else {
+                    analysisLog('❌ 发现数据完整性问题:', 'error');
+                    issues.forEach(issue => {
+                        analysisLog(`  - ${issue}`, 'error');
+                    });
+                }
+                
+            } catch (e) {
+                analysisLog(`检查失败: ${e.message}`, 'error');
+            }
+        }
+        
+        // 页面加载时初始化
+        window.onload = function() {
+            refreshGrids();
+            log('页面已加载，调试工具准备就绪', 'success');
+        };
+    </script>
+</body>
+</html>
+
+
+

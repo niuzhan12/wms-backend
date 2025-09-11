@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>清除本地存储数据</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .button:hover {
+            background-color: #c82333;
+        }
+        .button.success {
+            background-color: #28a745;
+        }
+        .button.success:hover {
+            background-color: #218838;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>清除本地存储数据</h1>
+        
+        <div class="info">
+            <strong>说明：</strong>此页面用于清除浏览器本地存储中的托盘和仓库数据，解决界面显示不需要的托盘数据问题。
+        </div>
+        
+        <div class="warning">
+            <strong>注意：</strong>清除数据后，需要重新启动应用才能看到效果。清除操作不可逆，请谨慎操作。
+        </div>
+        
+        <div>
+            <button class="button" onclick="clearAllData()">清除所有本地数据</button>
+            <button class="button" onclick="clearPalletData()">仅清除托盘数据</button>
+            <button class="button" onclick="clearWarehouseData()">仅清除仓库状态</button>
+            <button class="button success" onclick="checkCurrentData()">检查当前数据</button>
+        </div>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.textContent += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function checkCurrentData() {
+            log('=== 检查当前本地存储数据 ===');
+            
+            const keys = ['palletData', 'goodsData', 'warehouseStatus', 'systemLogs'];
+            keys.forEach(key => {
+                const data = localStorage.getItem(key);
+                if (data) {
+                    try {
+                        const parsed = JSON.parse(data);
+                        if (Array.isArray(parsed)) {
+                            log(`${key}: ${parsed.length} 条记录`);
+                        } else if (typeof parsed === 'object') {
+                            const count = Object.keys(parsed).length;
+                            log(`${key}: ${count} 个属性`);
+                        }
+                    } catch (e) {
+                        log(`${key}: 数据格式错误`);
+                    }
+                } else {
+                    log(`${key}: 无数据`);
+                }
+            });
+            
+            log('=== 检查完成 ===');
+        }
+
+        function clearPalletData() {
+            try {
+                localStorage.removeItem('palletData');
+                log('托盘数据已清除');
+            } catch (e) {
+                log('清除托盘数据失败: ' + e.message);
+            }
+        }
+
+        function clearWarehouseData() {
+            try {
+                localStorage.removeItem('warehouseStatus');
+                log('仓库状态数据已清除');
+            } catch (e) {
+                log('清除仓库状态数据失败: ' + e.message);
+            }
+        }
+
+        function clearAllData() {
+            try {
+                const keys = ['palletData', 'goodsData', 'warehouseStatus', 'systemLogs'];
+                keys.forEach(key => {
+                    localStorage.removeItem(key);
+                });
+                log('所有本地数据已清除');
+            } catch (e) {
+                log('清除所有数据失败: ' + e.message);
+            }
+        }
+
+        // 页面加载时自动检查数据
+        window.onload = function() {
+            log('页面已加载，正在检查当前数据...');
+            checkCurrentData();
+        };
+    </script>
+</body>
+</html>
+
+
+

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>位置分布修复测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            color: #333;
+            margin-top: 0;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .btn-info { background-color: #17a2b8; color: white; }
+        
+        .status-display {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .log-info { background-color: #d1ecf1; }
+        .log-warning { background-color: #fff3cd; }
+        .log-error { background-color: #f8d7da; }
+        .log-success { background-color: #d4edda; }
+        
+        .grid-display {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 5px;
+            margin: 15px 0;
+        }
+        .grid-cell {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+            background-color: white;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .grid-cell.has-pallet {
+            background-color: #e8f5e8;
+            border-color: #27ae60;
+        }
+        .grid-cell.no-pallet {
+            background-color: #ffffff;
+            border-color: #e9ecef;
+        }
+        .cell-coordinate {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .cell-status {
+            font-size: 10px;
+            color: #666;
+        }
+        
+        .form-group {
+            margin: 10px 0;
+        }
+        .form-group label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group select {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>位置分布修复测试页面</h1>
+    
+    <div class="container">
+        <h2>问题说明</h2>
+        <p>这个页面用于测试出库后位置分布更新的修复效果。主要解决了以下问题：</p>
+        <ul>
+            <li>出库后不再依赖货物分类页面加载状态</li>
+            <li>位置分布数据直接保存到localStorage</li>
+            <li>避免了"货物分类页面未加载"的错误</li>
+        </ul>
+    </div>
+    
+    <div class="container">
+        <h2>模拟操作测试</h2>
+        
+        <div class="test-section">
+            <h3>1. 模拟入库操作</h3>
+            <div class="form-group">
+                <label>物料编码:</label>
+                <input type="text" id="inboundMaterial" value="1001" placeholder="输入物料编码">
+            </div>
+            <div class="form-group">
+                <label>位置:</label>
+                <select id="inboundLocation">
+                    <option value="A-1-1">A-1-1</option>
+                    <option value="A-1-2">A-1-2</option>
+                    <option value="A-2-1">A-2-1</option>
+                    <option value="A-2-2">A-2-2</option>
+                    <option value="B-1-1">B-1-1</option>
+                    <option value="B-1-2">B-1-2</option>
+                </select>
+            </div>
+            <div class="button-group">
+                <button class="btn-success" onclick="simulateInbound()">模拟入库</button>
+                <button class="btn-info" onclick="checkLocationDistribution()">检查位置分布</button>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3>2. 模拟出库操作</h3>
+            <div class="form-group">
+                <label>物料编码:</label>
+                <input type="text" id="outboundMaterial" value="1001" placeholder="输入物料编码">
+            </div>
+            <div class="form-group">
+                <label>位置:</label>
+                <select id="outboundLocation">
+                    <option value="A-1-1">A-1-1</option>
+                    <option value="A-1-2">A-1-2</option>
+                    <option value="A-2-1">A-2-1</option>
+                    <option value="A-2-2">A-2-2</option>
+                    <option value="B-1-1">B-1-1</option>
+                    <option value="B-1-2">B-1-2</option>
+                </select>
+            </div>
+            <div class="button-group">
+                <button class="btn-warning" onclick="simulateOutbound()">模拟出库</button>
+                <button class="btn-info" onclick="checkLocationDistribution()">检查位置分布</button>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3>3. 数据管理</h3>
+            <div class="button-group">
+                <button class="btn-info" onclick="checkLocationDistribution()">检查位置分布</button>
+                <button class="btn-warning" onclick="clearLocationDistribution()">清空位置分布</button>
+                <button class="btn-info" onclick="checkLocalStorage()">检查localStorage</button>
+                <button class="btn-success" onclick="simulatePageLoad()">模拟页面加载</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>位置分布状态</h2>
+        <div id="locationStatus" class="status-display">点击"检查位置分布"查看当前状态</div>
+    </div>
+    
+    <div class="container">
+        <h2>操作日志</h2>
+        <div id="operationLog" class="status-display"></div>
+    </div>
+    
+    <div class="container">
+        <h2>仓库网格状态</h2>
+        <div class="grid-display" id="warehouseGrid">
+            <!-- 动态生成网格 -->
+        </div>
+    </div>
+    
+    <script>
+        // 初始化
+        let operationLog = [];
+        
+        // 添加日志
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = {
+                timestamp,
+                message,
+                type
+            };
+            operationLog.unshift(logEntry);
+            
+            // 限制日志数量
+            if (operationLog.length > 50) {
+                operationLog = operationLog.slice(0, 50);
+            }
+            
+            updateLogDisplay();
+        }
+        
+        // 更新日志显示
+        function updateLogDisplay() {
+            const logContainer = document.getElementById('operationLog');
+            logContainer.innerHTML = operationLog.map(entry => 
+                `<div class="log-entry log-${entry.type}">[${entry.timestamp}] ${entry.message}</div>`
+            ).join('');
+        }
+        
+        // 模拟入库操作
+        function simulateInbound() {
+            const materialCode = document.getElementById('inboundMaterial').value;
+            const location = document.getElementById('inboundLocation').value;
+            
+            if (!materialCode || !location) {
+                addLog('请输入物料编码和位置', 'error');
+                return;
+            }
+            
+            // 调用修复后的位置分布更新函数
+            updateGoodsLocationDistribution(materialCode, location, 'add');
+            
+            addLog(`入库操作: 物料${materialCode} 位置${location}`, 'success');
+            updateWarehouseGrid();
+        }
+        
+        // 模拟出库操作
+        function simulateOutbound() {
+            const materialCode = document.getElementById('outboundMaterial').value;
+            const location = document.getElementById('outboundLocation').value;
+            
+            if (!materialCode || !location) {
+                addLog('请输入物料编码和位置', 'error');
+                return;
+            }
+            
+            // 调用修复后的位置分布更新函数
+            updateGoodsLocationDistribution(materialCode, location, 'remove');
+            
+            addLog(`出库操作: 物料${materialCode} 位置${location}`, 'success');
+            updateWarehouseGrid();
+        }
+        
+        // 修复后的位置分布更新函数
+        function updateGoodsLocationDistribution(materialCode, location, action) {
+            console.log(`尝试更新货物${materialCode}位置分布：${action === 'add' ? '新增' : '移除'}${location}`);
+            
+            // 直接更新localStorage中的位置分布，不依赖货物分类页面
+            try {
+                const locationDistributionKey = 'goodsLocationDistribution';
+                let locationDistribution = JSON.parse(localStorage.getItem(locationDistributionKey) || '{}');
+                
+                if (!locationDistribution[materialCode]) {
+                    locationDistribution[materialCode] = [];
+                }
+                
+                if (action === 'add') {
+                    // 入库：添加位置
+                    if (!locationDistribution[materialCode].includes(location)) {
+                        locationDistribution[materialCode].push(location);
+                        console.log(`已添加位置${location}到货物${materialCode}`);
+                        addLog(`已添加位置${location}到货物${materialCode}`, 'info');
+                    }
+                } else if (action === 'remove') {
+                    // 出库：移除位置
+                    const index = locationDistribution[materialCode].indexOf(location);
+                    if (index > -1) {
+                        locationDistribution[materialCode].splice(index, 1);
+                        console.log(`已移除位置${location}从货物${materialCode}`);
+                        addLog(`已移除位置${location}从货物${materialCode}`, 'info');
+                    }
+                } else if (action === 'clear') {
+                    // 清空：移除所有位置
+                    locationDistribution[materialCode] = [];
+                }
+                
+                // 保存到localStorage
+                localStorage.setItem(locationDistributionKey, JSON.stringify(locationDistribution));
+                
+                // 尝试调用货物分类页面的全局方法（如果存在）
+                if (window.updateGoodsLocationDistribution) {
+                    window.updateGoodsLocationDistribution(materialCode, location, action);
+                    console.log('货物分类页面同步成功');
+                    addLog('货物分类页面同步成功', 'success');
+                } else {
+                    addLog('货物分类页面未加载，但位置分布已保存到localStorage', 'warning');
+                }
+                
+                addLog(`货物${materialCode}位置分布已更新：${action === 'add' ? '新增' : '移除'}${location}`, 'success');
+                console.log('位置分布更新成功');
+                
+            } catch (error) {
+                console.error('更新位置分布失败:', error);
+                addLog(`更新位置分布失败：${materialCode} - ${error.message}`, 'error');
+            }
+        }
+        
+        // 检查位置分布
+        function checkLocationDistribution() {
+            try {
+                const locationDistributionKey = 'goodsLocationDistribution';
+                const stored = localStorage.getItem(locationDistributionKey);
+                let locationDistribution = {};
+                
+                if (stored) {
+                    locationDistribution = JSON.parse(stored);
+                }
+                
+                const statusContainer = document.getElementById('locationStatus');
+                statusContainer.innerHTML = JSON.stringify(locationDistribution, null, 2);
+                
+                addLog('位置分布检查完成', 'info');
+            } catch (error) {
+                addLog(`检查位置分布失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 清空位置分布
+        function clearLocationDistribution() {
+            try {
+                localStorage.removeItem('goodsLocationDistribution');
+                addLog('位置分布数据已清空', 'warning');
+                checkLocationDistribution();
+                updateWarehouseGrid();
+            } catch (error) {
+                addLog(`清空位置分布失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 检查localStorage
+        function checkLocalStorage() {
+            const keys = Object.keys(localStorage);
+            const relevantKeys = keys.filter(key => 
+                key.includes('warehouse') || 
+                key.includes('goods') || 
+                key.includes('pallet') || 
+                key.includes('location')
+            );
+            
+            let result = '相关localStorage键:\n';
+            relevantKeys.forEach(key => {
+                try {
+                    const value = localStorage.getItem(key);
+                    result += `\n${key}: ${value.substring(0, 200)}${value.length > 200 ? '...' : ''}`;
+                } catch (error) {
+                    result += `\n${key}: [读取失败]`;
+                }
+            });
+            
+            document.getElementById('locationStatus').innerHTML = result;
+            addLog('localStorage检查完成', 'info');
+        }
+        
+        // 模拟页面加载
+        function simulatePageLoad() {
+            addLog('模拟货物分类页面加载...', 'info');
+            
+            // 模拟全局方法暴露
+            window.updateGoodsLocationDistribution = function(materialCode, location, action) {
+                addLog(`货物分类页面收到更新: ${materialCode} - ${action} - ${location}`, 'success');
+            };
+            
+            addLog('货物分类页面全局方法已暴露', 'success');
+        }
+        
+        // 更新仓库网格显示
+        function updateWarehouseGrid() {
+            const gridContainer = document.getElementById('warehouseGrid');
+            const locations = ['A-1-1', 'A-1-2', 'A-2-1', 'A-2-2', 'B-1-1', 'B-1-2'];
+            
+            try {
+                const locationDistributionKey = 'goodsLocationDistribution';
+                const stored = localStorage.getItem(locationDistributionKey);
+                let locationDistribution = {};
+                
+                if (stored) {
+                    locationDistribution = JSON.parse(stored);
+                }
+                
+                gridContainer.innerHTML = locations.map(location => {
+                    // 检查这个位置是否有托盘
+                    let hasPallet = false;
+                    let materialCode = '';
+                    
+                    for (const code in locationDistribution) {
+                        if (locationDistribution[code].includes(location)) {
+                            hasPallet = true;
+                            materialCode = code;
+                            break;
+                        }
+                    }
+                    
+                    const cellClass = hasPallet ? 'has-pallet' : 'no-pallet';
+                    const statusText = hasPallet ? `物料: ${materialCode}` : '空';
+                    
+                    return `
+                        <div class="grid-cell ${cellClass}">
+                            <div class="cell-coordinate">${location}</div>
+                            <div class="cell-status">${statusText}</div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                addLog(`更新仓库网格失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            addLog('测试页面加载完成', 'info');
+            updateWarehouseGrid();
+            checkLocationDistribution();
+        });
+    </script>
+</body>
+</html>
+
+

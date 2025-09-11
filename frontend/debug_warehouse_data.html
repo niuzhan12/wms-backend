@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仓库数据调试工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .debug-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #495057;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .data-display {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .button.danger {
+            background-color: #dc3545;
+        }
+        .button.danger:hover {
+            background-color: #c82333;
+        }
+        .button.success {
+            background-color: #28a745;
+        }
+        .button.success:hover {
+            background-color: #218838;
+        }
+        .grid-preview {
+            display: flex;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        .warehouse-preview {
+            flex: 1;
+        }
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 2px;
+            border: 2px solid #bdc3c7;
+            padding: 10px;
+            background-color: white;
+        }
+        .preview-cell {
+            width: 60px;
+            height: 50px;
+            border: 1px solid #dee2e6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            text-align: center;
+            background-color: #f8f9fa;
+        }
+        .preview-cell.has-data {
+            background-color: #e8f5e8;
+            border-color: #27ae60;
+        }
+        .preview-cell.coordinate {
+            font-size: 8px;
+            color: #6c757d;
+        }
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #28a745;
+            margin-bottom: 2px;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .warning {
+            color: #ffc107;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>仓库数据调试工具</h1>
+        <p>此工具用于诊断仓库数据显示错位问题，检查每个格子的数据是否正确存储和显示。</p>
+        
+        <div class="debug-section">
+            <h3>1. 检查当前localStorage数据</h3>
+            <button class="button" onclick="checkLocalStorage()">检查localStorage</button>
+            <button class="button danger" onclick="clearAllData()">清空所有数据</button>
+            <div id="localStorageData" class="data-display">点击"检查localStorage"查看数据</div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>2. 测试数据存储</h3>
+            <button class="button success" onclick="testDataStorage()">测试数据存储</button>
+            <button class="button" onclick="testSpecificLocation()">测试特定位置</button>
+            <div id="testResults" class="data-display">点击"测试数据存储"开始测试</div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>3. 数据可视化预览</h3>
+            <button class="button" onclick="refreshPreview()">刷新预览</button>
+            <div class="grid-preview">
+                <div class="warehouse-preview">
+                    <h4>A库数据预览</h4>
+                    <div id="warehouseA" class="preview-grid"></div>
+                </div>
+                <div class="warehouse-preview">
+                    <h4>B库数据预览</h4>
+                    <div id="warehouseB" class="preview-grid"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>4. 问题诊断</h3>
+            <button class="button" onclick="diagnoseIssues()">诊断问题</button>
+            <div id="diagnosis" class="data-display">点击"诊断问题"开始诊断</div>
+        </div>
+    </div>
+
+    <script>
+        // 模拟仓库数据结构
+        let warehouseStatus = {};
+        
+        // 检查localStorage数据
+        function checkLocalStorage() {
+            const display = document.getElementById('localStorageData');
+            const keys = ['warehouseStatus', 'palletData', 'goodsData', 'systemLogs'];
+            let result = '=== localStorage 数据检查 ===\n\n';
+            
+            keys.forEach(key => {
+                const data = localStorage.getItem(key);
+                if (data) {
+                    try {
+                        const parsed = JSON.parse(data);
+                        result += `${key}:\n`;
+                        if (key === 'warehouseStatus') {
+                            result += `  仓库数量: ${Object.keys(parsed).length}\n`;
+                            Object.keys(parsed).forEach(warehouse => {
+                                if (parsed[warehouse] && parsed[warehouse].grid) {
+                                    const gridKeys = Object.keys(parsed[warehouse].grid);
+                                    result += `  ${warehouse}库: ${gridKeys.length} 个位置有数据\n`;
+                                    gridKeys.forEach(pos => {
+                                        const cellData = parsed[warehouse].grid[pos];
+                                        result += `    ${pos}: 托盘${cellData.palletCode}, 物料${cellData.materialCode}\n`;
+                                    });
+                                }
+                            });
+                        } else if (Array.isArray(parsed)) {
+                            result += `  记录数量: ${parsed.length}\n`;
+                        } else {
+                            result += `  属性数量: ${Object.keys(parsed).length}\n`;
+                        }
+                        result += '\n';
+                    } catch (e) {
+                        result += `${key}: 数据格式错误 - ${e.message}\n\n`;
+                    }
+                } else {
+                    result += `${key}: 无数据\n\n`;
+                }
+            });
+            
+            display.textContent = result;
+        }
+        
+        // 测试数据存储
+        function testDataStorage() {
+            const display = document.getElementById('testResults');
+            let result = '=== 测试数据存储 ===\n\n';
+            
+            // 清空现有数据
+            warehouseStatus = {};
+            
+            // 测试A库数据
+            warehouseStatus.A = { grid: {} };
+            warehouseStatus.A.grid['1-1'] = {
+                hasPallet: true,
+                palletCode: 'P001',
+                materialCode: '1001',
+                materialStatus: 'RAW',
+                remarks: '测试数据A库1-1'
+            };
+            warehouseStatus.A.grid['3-3'] = {
+                hasPallet: true,
+                palletCode: 'P005',
+                materialCode: '1005',
+                materialStatus: 'FINISHED',
+                remarks: '测试数据A库3-3'
+            };
+            
+            // 测试B库数据
+            warehouseStatus.B = { grid: {} };
+            warehouseStatus.B.grid['2-1'] = {
+                hasPallet: true,
+                palletCode: 'P002',
+                materialCode: '1001',
+                materialStatus: 'RAW',
+                remarks: '测试数据B库2-1'
+            };
+            
+            // 保存到localStorage
+            localStorage.setItem('warehouseStatus', JSON.stringify(warehouseStatus));
+            
+            result += '已创建测试数据:\n';
+            result += 'A库1-1: P001-1001\n';
+            result += 'A库3-3: P005-1005\n';
+            result += 'B库2-1: P002-1001\n\n';
+            result += '数据已保存到localStorage\n';
+            result += '请刷新预览查看效果';
+            
+            display.textContent = result;
+            refreshPreview();
+        }
+        
+        // 测试特定位置
+        function testSpecificLocation() {
+            const display = document.getElementById('testResults');
+            let result = '=== 测试特定位置 ===\n\n';
+            
+            // 检查当前数据
+            const currentData = localStorage.getItem('warehouseStatus');
+            if (currentData) {
+                try {
+                    const parsed = JSON.parse(currentData);
+                    result += '当前数据检查:\n';
+                    
+                    // 检查A库1-1
+                    const a11 = parsed.A?.grid?.['1-1'];
+                    result += `A库1-1: ${a11 ? `托盘${a11.palletCode}, 物料${a11.materialCode}` : '无数据'}\n`;
+                    
+                    // 检查B库2-1
+                    const b21 = parsed.B?.grid?.['2-1'];
+                    result += `B库2-1: ${b21 ? `托盘${b21.palletCode}, 物料${b21.materialCode}` : '无数据'}\n`;
+                    
+                    // 检查是否有数据错位
+                    const allPositions = [];
+                    Object.keys(parsed).forEach(warehouse => {
+                        if (parsed[warehouse] && parsed[warehouse].grid) {
+                            Object.keys(parsed[warehouse].grid).forEach(pos => {
+                                allPositions.push(`${warehouse}库${pos}`);
+                            });
+                        }
+                    });
+                    
+                    result += `\n所有有数据的位置: ${allPositions.join(', ')}\n`;
+                    
+                } catch (e) {
+                    result += `数据解析错误: ${e.message}\n`;
+                }
+            } else {
+                result += 'localStorage中没有仓库数据\n';
+            }
+            
+            display.textContent = result;
+        }
+        
+        // 刷新预览
+        function refreshPreview() {
+            const warehouseA = document.getElementById('warehouseA');
+            const warehouseB = document.getElementById('warehouseB');
+            
+            // 清空预览
+            warehouseA.innerHTML = '';
+            warehouseB.innerHTML = '';
+            
+            // 获取当前数据
+            const currentData = localStorage.getItem('warehouseStatus');
+            if (currentData) {
+                try {
+                    const parsed = JSON.parse(currentData);
+                    
+                    // 创建A库预览
+                    for (let row = 1; row <= 4; row++) {
+                        for (let col = 1; col <= 6; col++) {
+                            const cell = document.createElement('div');
+                            const key = `${row}-${col}`;
+                            const cellData = parsed.A?.grid?.[key];
+                            
+                            cell.className = 'preview-cell';
+                            if (cellData && cellData.hasPallet) {
+                                cell.className += ' has-data';
+                                cell.innerHTML = `
+                                    <div class="status-indicator"></div>
+                                    <div>${cellData.palletCode}</div>
+                                    <div>${cellData.materialCode}</div>
+                                `;
+                            } else {
+                                cell.innerHTML = `<div class="coordinate">${row}-${col}</div>`;
+                            }
+                            warehouseA.appendChild(cell);
+                        }
+                    }
+                    
+                    // 创建B库预览
+                    for (let row = 1; row <= 4; row++) {
+                        for (let col = 1; col <= 6; col++) {
+                            const cell = document.createElement('div');
+                            const key = `${row}-${col}`;
+                            const cellData = parsed.B?.grid?.[key];
+                            
+                            cell.className = 'preview-cell';
+                            if (cellData && cellData.hasPallet) {
+                                cell.className += ' has-data';
+                                cell.innerHTML = `
+                                    <div class="status-indicator"></div>
+                                    <div>${cellData.palletCode}</div>
+                                    <div>${cellData.materialCode}</div>
+                                `;
+                            } else {
+                                cell.innerHTML = `<div class="coordinate">${row}-${col}`;
+                            }
+                            warehouseB.appendChild(cell);
+                        }
+                    }
+                } catch (e) {
+                    console.error('预览刷新失败:', e);
+                }
+            }
+        }
+        
+        // 诊断问题
+        function diagnoseIssues() {
+            const display = document.getElementById('diagnosis');
+            let result = '=== 问题诊断 ===\n\n';
+            
+            const currentData = localStorage.getItem('warehouseStatus');
+            if (!currentData) {
+                result += '❌ 问题: localStorage中没有仓库数据\n';
+                result += '💡 建议: 先运行测试数据存储\n';
+                display.textContent = result;
+                return;
+            }
+            
+            try {
+                const parsed = JSON.parse(currentData);
+                let issues = [];
+                
+                // 检查数据结构
+                if (!parsed.A || !parsed.B) {
+                    issues.push('仓库A或B缺失');
+                }
+                
+                // 检查数据完整性
+                Object.keys(parsed).forEach(warehouse => {
+                    if (parsed[warehouse] && parsed[warehouse].grid) {
+                        Object.keys(parsed[warehouse].grid).forEach(pos => {
+                            const cellData = parsed[warehouse].grid[pos];
+                            if (!cellData.hasPallet || !cellData.palletCode || !cellData.materialCode) {
+                                issues.push(`${warehouse}库${pos}数据不完整`);
+                            }
+                        });
+                    }
+                });
+                
+                if (issues.length === 0) {
+                    result += '✅ 数据结构正常\n';
+                    result += '✅ 所有位置数据完整\n';
+                    result += '✅ 没有发现明显问题\n\n';
+                    result += '如果仍有显示问题，请检查:\n';
+                    result += '1. 前端代码中的getCellStatus函数\n';
+                    result += '2. 数据绑定逻辑\n';
+                    result += '3. 浏览器缓存问题\n';
+                } else {
+                    result += '❌ 发现以下问题:\n';
+                    issues.forEach(issue => {
+                        result += `  - ${issue}\n`;
+                    });
+                }
+                
+            } catch (e) {
+                result += `❌ 数据解析错误: ${e.message}\n`;
+            }
+            
+            display.textContent = result;
+        }
+        
+        // 清空所有数据
+        function clearAllData() {
+            const keys = ['warehouseStatus', 'palletData', 'goodsData', 'systemLogs'];
+            keys.forEach(key => localStorage.removeItem(key));
+            warehouseStatus = {};
+            
+            document.getElementById('localStorageData').textContent = '所有数据已清空';
+            document.getElementById('testResults').textContent = '所有数据已清空';
+            document.getElementById('diagnosis').textContent = '所有数据已清空';
+            refreshPreview();
+        }
+        
+        // 页面加载时自动检查
+        window.onload = function() {
+            checkLocalStorage();
+            refreshPreview();
+        };
+    </script>
+</body>
+</html>
+
+
+
