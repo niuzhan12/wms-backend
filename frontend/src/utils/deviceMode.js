@@ -1,7 +1,8 @@
 // 设备模式状态管理
 class DeviceModeManager {
   constructor() {
-    this.mode = 'local' // 默认本地模式
+    // 从localStorage加载保存的模式，如果没有则默认为本地模式
+    this.mode = localStorage.getItem('deviceMode') || 'local'
     this.listeners = []
   }
 
@@ -13,6 +14,8 @@ class DeviceModeManager {
   // 设置模式
   setMode(mode) {
     this.mode = mode
+    // 保存到localStorage
+    localStorage.setItem('deviceMode', mode)
     this.notifyListeners()
   }
 

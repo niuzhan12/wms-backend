@@ -7,6 +7,7 @@ import PalletClassification from '../views/PalletClassification.vue'
 import GoodsClassification from '../views/GoodsClassification.vue'
 import DeviceStatus from '../views/DeviceStatus.vue'
 import Debug from '../views/Debug.vue'
+import ModbusTest from '../views/ModbusTest.vue'
 
 const routes = [
   {
@@ -48,6 +49,12 @@ const routes = [
     name: 'Debug',
     component: Debug,
     meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/modbus-test',
+    name: 'ModbusTest',
+    component: ModbusTest,
+    meta: { requiresAuth: true }
   },
 ]
 

@@ -63,6 +63,10 @@
                 <span>调试</span>
               </el-menu-item>
               
+              <el-menu-item index="modbus-test">
+                <el-icon><Connection /></el-icon>
+                <span>Modbus测试</span>
+              </el-menu-item>
               
             </template>
           </el-menu>
