@@ -499,19 +499,30 @@ export default {
         let response
         
         if (currentMode === 'remote') {
-          // 远程模式：自动入库
-          console.log('远程模式：执行自动入库')
-          response = await axios.post('/api/warehouse/auto-inbound', {
-            warehouseCode: inboundForm.warehouseCode,
-            palletCode: inboundForm.palletCode,
-            materialCode: inboundForm.materialCode
-          })
+          // 远程模式：检查MES订单或执行自动入库
+          console.log('远程模式：检查MES订单')
           
-          // 自动入库成功后，更新表单中的位置信息
+          // 先检查是否有MES入库订单
+          const orderResponse = await axios.get('/api/mes-wms/check-orders')
+          if (orderResponse.data.success && orderResponse.data.hasInboundOrder) {
+            // 有MES入库订单，执行MES入库
+            console.log('执行MES入库订单')
+            response = await axios.post('/api/mes-wms/execute-inbound')
+          } else {
+            // 没有MES订单，执行自动入库
+            console.log('执行自动入库')
+            response = await axios.post('/api/warehouse/auto-inbound', {
+              warehouseCode: inboundForm.warehouseCode,
+              palletCode: inboundForm.palletCode,
+              materialCode: inboundForm.materialCode
+            })
+          }
+          
+          // 入库成功后，更新表单中的位置信息
           if (response.data.success) {
             inboundForm.row = response.data.row
             inboundForm.column = response.data.column
-            console.log('自动入库找到位置:', response.data.row, response.data.column)
+            console.log('入库找到位置:', response.data.row, response.data.column)
           }
         } else {
           // 本地模式：手动入库
@@ -568,17 +579,28 @@ export default {
         let response
         
         if (currentMode === 'remote') {
-          // 远程模式：自动出库
-          console.log('远程模式：执行自动出库')
-          response = await axios.post('/api/warehouse/auto-outbound', {
-            warehouseCode: outboundForm.warehouseCode
-          })
+          // 远程模式：检查MES订单或执行自动出库
+          console.log('远程模式：检查MES订单')
           
-          // 自动出库成功后，更新表单中的位置信息
+          // 先检查是否有MES出库订单
+          const orderResponse = await axios.get('/api/mes-wms/check-orders')
+          if (orderResponse.data.success && orderResponse.data.hasOutboundOrder) {
+            // 有MES出库订单，执行MES出库
+            console.log('执行MES出库订单')
+            response = await axios.post('/api/mes-wms/execute-outbound')
+          } else {
+            // 没有MES订单，执行自动出库
+            console.log('执行自动出库')
+            response = await axios.post('/api/warehouse/auto-outbound', {
+              warehouseCode: outboundForm.warehouseCode
+            })
+          }
+          
+          // 出库成功后，更新表单中的位置信息
           if (response.data.success) {
             outboundForm.row = response.data.row
             outboundForm.column = response.data.column
-            console.log('自动出库找到位置:', response.data.row, response.data.column)
+            console.log('出库找到位置:', response.data.row, response.data.column)
           }
         } else {
           // 本地模式：手动出库

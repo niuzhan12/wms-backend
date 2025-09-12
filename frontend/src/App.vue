@@ -68,6 +68,12 @@
                 <span>Modbus测试</span>
               </el-menu-item>
               
+              <el-menu-item index="mes-wms-monitor">
+                <el-icon><Monitor /></el-icon>
+                <span>MES-WMS监控</span>
+              </el-menu-item>
+              
+              
             </template>
           </el-menu>
         </el-aside>

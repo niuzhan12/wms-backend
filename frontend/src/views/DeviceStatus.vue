@@ -153,12 +153,12 @@ export default {
       }
     }
     
-    // 监听WMS-MES模式变化
+    // 监听MES-WMS模式变化
     const checkWmsMode = async () => {
       try {
-        const response = await axios.get('/api/wms-mes/device/mode')
+        const response = await axios.get('/api/mes-wms/mode')
         if (response.data.success) {
-          const wmsMode = response.data.data.mode
+          const wmsMode = response.data.mode
           const currentMode = deviceStatus.value.remoteMode ? 1 : 0
           if (wmsMode !== currentMode) {
             deviceStatus.value.remoteMode = wmsMode === 1
@@ -193,19 +193,27 @@ export default {
     
     const onRemoteModeChange = async (value) => {
       try {
-        // 更新全局设备模式状态
-        const mode = value ? 'remote' : 'local'
-        deviceModeManager.setMode(mode)
+        // 更新MES-WMS模式
+        const mode = value ? 1 : 0
+        const response = await axios.post('/api/mes-wms/update-mode', { mode })
         
-        // 强制更新本地设备状态
-        deviceStatus.value.remoteMode = value
-        
-        console.log(`模式已切换到: ${mode}, remoteMode: ${deviceStatus.value.remoteMode}`)
-        ElMessage.success(`已切换到${value ? '远程模式' : '本地模式'}`)
-        
-        // 不再重新加载设备状态，避免覆盖模式设置
+        if (response.data.success) {
+          // 更新全局设备模式状态
+          const modeText = value ? 'remote' : 'local'
+          deviceModeManager.setMode(modeText)
+          
+          // 强制更新本地设备状态
+          deviceStatus.value.remoteMode = value
+          
+          console.log(`模式已切换到: ${modeText}, remoteMode: ${deviceStatus.value.remoteMode}`)
+          ElMessage.success(`已切换到${value ? '远程模式' : '本地模式'}`)
+        } else {
+          ElMessage.error(response.data.message || '切换模式失败')
+          // 如果失败，恢复原值
+          deviceStatus.value.remoteMode = !value
+        }
       } catch (error) {
-        ElMessage.error('切换模式失败')
+        ElMessage.error('切换模式失败: ' + error.message)
         console.error(error)
         // 如果失败，恢复原值
         deviceStatus.value.remoteMode = !value

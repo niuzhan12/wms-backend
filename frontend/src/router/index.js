@@ -8,6 +8,7 @@ import GoodsClassification from '../views/GoodsClassification.vue'
 import DeviceStatus from '../views/DeviceStatus.vue'
 import Debug from '../views/Debug.vue'
 import ModbusTest from '../views/ModbusTest.vue'
+import MesWmsMonitor from '../views/MesWmsMonitor.vue'
 
 const routes = [
   {
@@ -55,6 +56,12 @@ const routes = [
     name: 'ModbusTest',
     component: ModbusTest,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/mes-wms-monitor',
+    name: 'MesWmsMonitor',
+    component: MesWmsMonitor,
+    meta: { requiresAuth: true, requiresAdmin: true }
   },
 ]
 
