@@ -4,7 +4,6 @@ import com.wms.entity.User;
 import com.wms.repository.UserRepository;
 import com.wms.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -20,8 +19,6 @@ public class AuthService {
     @Autowired
     private JwtUtil jwtUtil;
     
-    @Autowired
-    private PasswordEncoder passwordEncoder;
     
     public Map<String, Object> login(String username, String password) {
         Map<String, Object> result = new HashMap<>();

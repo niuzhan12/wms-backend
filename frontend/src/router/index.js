@@ -9,6 +9,7 @@ import DeviceStatus from '../views/DeviceStatus.vue'
 import Debug from '../views/Debug.vue'
 import ModbusTest from '../views/ModbusTest.vue'
 import MesWmsMonitor from '../views/MesWmsMonitor.vue'
+import StackerMonitor from '../views/StackerMonitor.vue'
 
 const routes = [
   {
@@ -61,6 +62,12 @@ const routes = [
     path: '/mes-wms-monitor',
     name: 'MesWmsMonitor',
     component: MesWmsMonitor,
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/stacker-monitor',
+    name: 'StackerMonitor',
+    component: StackerMonitor,
     meta: { requiresAuth: true, requiresAdmin: true }
   },
 ]

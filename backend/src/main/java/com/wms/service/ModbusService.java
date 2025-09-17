@@ -47,6 +47,25 @@ public class ModbusService {
         }
     }
     
+    /**
+     * 重新初始化连接方法
+     */
+    public void reconnect() {
+        try {
+            if (connection != null && connection.isConnected()) {
+                connection.close();
+            }
+            
+            connection = new TCPMasterConnection(InetAddress.getByName(host));
+            connection.setPort(port);
+            connection.setTimeout(timeout);
+            connection.connect();
+            System.out.println("Modbus连接已重新建立: " + host + ":" + port);
+        } catch (Exception e) {
+            System.err.println("Modbus重连失败: " + e.getMessage());
+        }
+    }
+    
     @PreDestroy
     public void closeConnection() {
         if (connection != null && connection.isConnected()) {
@@ -138,11 +157,4 @@ public class ModbusService {
         }
     }
     
-    /**
-     * 重新连接
-     */
-    public void reconnect() {
-        closeConnection();
-        initConnection();
-    }
 }

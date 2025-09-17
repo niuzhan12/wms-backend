@@ -6,35 +6,35 @@
     
     <div class="content-container">
       <el-row :gutter="20">
-        <!-- 连接配置 -->
+        <!-- MES-WMS连接配置 -->
         <el-col :span="12">
           <el-card class="config-card">
             <template #header>
               <div class="card-header">
-                <span>连接配置</span>
+                <span>MES-WMS连接配置 (端口502)</span>
               </div>
             </template>
             
-            <el-form :model="connectionConfig" label-width="80px">
+            <el-form :model="mesWmsConfig" label-width="80px">
               <el-form-item label="IP地址">
-                <el-input v-model="connectionConfig.host" placeholder="127.0.0.1" />
+                <el-input v-model="mesWmsConfig.host" placeholder="127.0.0.1" />
               </el-form-item>
               <el-form-item label="端口">
-                <el-input-number v-model="connectionConfig.port" :min="1" :max="65535" />
+                <el-input-number v-model="mesWmsConfig.port" :min="1" :max="65535" />
               </el-form-item>
               <el-form-item label="从站ID">
-                <el-input-number v-model="connectionConfig.slaveId" :min="1" :max="255" />
+                <el-input-number v-model="mesWmsConfig.slaveId" :min="1" :max="255" />
               </el-form-item>
               <el-form-item>
                 <el-button 
-                  :type="connectionStatus.connected ? 'danger' : 'success'" 
-                  @click="toggleConnection"
-                  :loading="connecting"
+                  :type="mesWmsStatus.connected ? 'danger' : 'success'" 
+                  @click="toggleMesWmsConnection"
+                  :loading="mesWmsConnecting"
                 >
                   <el-icon><Connection /></el-icon>
-                  {{ connectionStatus.connected ? '断开连接' : '连接' }}
+                  {{ mesWmsStatus.connected ? '断开连接' : '连接' }}
                 </el-button>
-                <el-button type="primary" @click="checkConnection" style="margin-left: 10px;">
+                <el-button type="primary" @click="checkMesWmsConnection" style="margin-left: 10px;">
                   <el-icon><Refresh /></el-icon>
                   检查状态
                 </el-button>
@@ -43,25 +43,88 @@
           </el-card>
         </el-col>
         
-        <!-- 连接状态 -->
+        <!-- WMS-堆垛机连接配置 -->
+        <el-col :span="12">
+          <el-card class="config-card">
+            <template #header>
+              <div class="card-header">
+                <span>WMS-堆垛机连接配置 (端口503)</span>
+              </div>
+            </template>
+            
+            <el-form :model="wmsStackerConfig" label-width="80px">
+              <el-form-item label="IP地址">
+                <el-input v-model="wmsStackerConfig.host" placeholder="127.0.0.1" />
+              </el-form-item>
+              <el-form-item label="端口">
+                <el-input-number v-model="wmsStackerConfig.port" :min="1" :max="65535" />
+              </el-form-item>
+              <el-form-item label="从站ID">
+                <el-input-number v-model="wmsStackerConfig.slaveId" :min="1" :max="255" />
+              </el-form-item>
+              <el-form-item>
+                <el-button 
+                  :type="wmsStackerStatus.connected ? 'danger' : 'success'" 
+                  @click="toggleWmsStackerConnection"
+                  :loading="wmsStackerConnecting"
+                >
+                  <el-icon><Connection /></el-icon>
+                  {{ wmsStackerStatus.connected ? '断开连接' : '连接' }}
+                </el-button>
+                <el-button type="primary" @click="checkWmsStackerConnection" style="margin-left: 10px;">
+                  <el-icon><Refresh /></el-icon>
+                  检查状态
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </el-card>
+        </el-col>
+      </el-row>
+      
+      <el-row :gutter="20" style="margin-top: 20px;">
+        <!-- MES-WMS连接状态 -->
         <el-col :span="12">
           <el-card class="status-card">
             <template #header>
               <div class="card-header">
-                <span>连接状态</span>
+                <span>MES-WMS连接状态</span>
               </div>
             </template>
             
             <div class="status-content">
-              <el-tag :type="connectionStatus.connected ? 'success' : 'danger'" size="large">
-                {{ connectionStatus.connected ? '已连接' : '未连接' }}
+              <el-tag :type="mesWmsStatus.connected ? 'success' : 'danger'" size="large">
+                {{ mesWmsStatus.connected ? '已连接' : '未连接' }}
               </el-tag>
-              <p class="status-message">{{ connectionStatus.message }}</p>
-              <div v-if="connectionStatus.connected" class="connection-info">
+              <p class="status-message">{{ mesWmsStatus.message }}</p>
+              <div v-if="mesWmsStatus.connected" class="connection-info">
                 <p><strong>连接信息：</strong></p>
-                <p>IP: {{ connectionConfig.host }}</p>
-                <p>端口: {{ connectionConfig.port }}</p>
-                <p>从站ID: {{ connectionConfig.slaveId }}</p>
+                <p>IP: {{ mesWmsConfig.host }}</p>
+                <p>端口: {{ mesWmsConfig.port }}</p>
+                <p>从站ID: {{ mesWmsConfig.slaveId }}</p>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+        
+        <!-- WMS-堆垛机连接状态 -->
+        <el-col :span="12">
+          <el-card class="status-card">
+            <template #header>
+              <div class="card-header">
+                <span>WMS-堆垛机连接状态</span>
+              </div>
+            </template>
+            
+            <div class="status-content">
+              <el-tag :type="wmsStackerStatus.connected ? 'success' : 'danger'" size="large">
+                {{ wmsStackerStatus.connected ? '已连接' : '未连接' }}
+              </el-tag>
+              <p class="status-message">{{ wmsStackerStatus.message }}</p>
+              <div v-if="wmsStackerStatus.connected" class="connection-info">
+                <p><strong>连接信息：</strong></p>
+                <p>IP: {{ wmsStackerConfig.host }}</p>
+                <p>端口: {{ wmsStackerConfig.port }}</p>
+                <p>从站ID: {{ wmsStackerConfig.slaveId }}</p>
               </div>
             </div>
           </el-card>
@@ -180,18 +243,33 @@ export default {
     Refresh
   },
   setup() {
-    const connectionStatus = ref({
+    // MES-WMS连接状态和配置
+    const mesWmsStatus = ref({
       connected: false,
       message: '未检查'
     })
     
-    const connectionConfig = reactive({
+    const mesWmsConfig = reactive({
       host: '127.0.0.1',
       port: 502,
       slaveId: 1
     })
     
-    const connecting = ref(false)
+    const mesWmsConnecting = ref(false)
+    
+    // WMS-堆垛机连接状态和配置
+    const wmsStackerStatus = ref({
+      connected: false,
+      message: '未检查'
+    })
+    
+    const wmsStackerConfig = reactive({
+      host: '127.0.0.1',
+      port: 503,
+      slaveId: 1
+    })
+    
+    const wmsStackerConnecting = ref(false)
     
     const readForm = reactive({
       startAddress: 4001,
@@ -208,65 +286,105 @@ export default {
     const writing = ref(false)
     const logs = ref([])
     
-    // 检查连接状态
-    const checkConnection = async () => {
+    // 检查MES-WMS连接状态
+    const checkMesWmsConnection = async () => {
       try {
-        const response = await axios.get('/api/modbus/status')
-        connectionStatus.value = response.data
-        addLog('INFO', response.data.message)
+        const response = await axios.get('/api/mes-wms/status')
+        mesWmsStatus.value = {
+          connected: response.data.connected || false,
+          message: response.data.message || 'MES-WMS连接状态检查完成'
+        }
+        addLog('INFO', 'MES-WMS: ' + mesWmsStatus.value.message)
       } catch (error) {
-        ElMessage.error('检查连接失败')
-        addLog('ERROR', '检查连接失败: ' + error.message)
+        ElMessage.error('检查MES-WMS连接失败')
+        addLog('ERROR', 'MES-WMS连接检查失败: ' + error.message)
       }
     }
     
-    // 切换连接状态
-    const toggleConnection = async () => {
-      if (connectionStatus.value.connected) {
+    // 检查WMS-堆垛机连接状态
+    const checkWmsStackerConnection = async () => {
+      try {
+        const response = await axios.get('/api/stacker-monitor/status')
+        wmsStackerStatus.value = {
+          connected: response.data.connected || false,
+          message: response.data.message || 'WMS-堆垛机连接状态检查完成'
+        }
+        addLog('INFO', 'WMS-堆垛机: ' + wmsStackerStatus.value.message)
+      } catch (error) {
+        ElMessage.error('检查WMS-堆垛机连接失败')
+        addLog('ERROR', 'WMS-堆垛机连接检查失败: ' + error.message)
+      }
+    }
+    
+    // 切换MES-WMS连接状态
+    const toggleMesWmsConnection = async () => {
+      if (mesWmsStatus.value.connected) {
         // 断开连接
         try {
-          const response = await axios.post('/api/modbus/disconnect')
-          connectionStatus.value.connected = false
-          connectionStatus.value.message = '已断开连接'
-          addLog('INFO', 'Modbus连接已断开')
-          ElMessage.success('连接已断开')
+          const response = await axios.post('/api/mes-wms/disconnect')
+          mesWmsStatus.value.connected = false
+          mesWmsStatus.value.message = 'MES-WMS连接已断开'
+          addLog('INFO', 'MES-WMS连接已断开')
+          ElMessage.success('MES-WMS连接已断开')
         } catch (error) {
-          ElMessage.error('断开连接失败')
-          addLog('ERROR', '断开连接失败: ' + error.message)
+          ElMessage.error('断开MES-WMS连接失败')
+          addLog('ERROR', '断开MES-WMS连接失败: ' + error.message)
         }
       } else {
         // 建立连接
-        connecting.value = true
+        mesWmsConnecting.value = true
         try {
-          const response = await axios.post('/api/modbus/connect', {
-            host: connectionConfig.host,
-            port: connectionConfig.port,
-            slaveId: connectionConfig.slaveId
+          const response = await axios.post('/api/mes-wms/connect', {
+            host: mesWmsConfig.host,
+            port: mesWmsConfig.port,
+            slaveId: mesWmsConfig.slaveId
           })
-          connectionStatus.value.connected = response.data.success
-          connectionStatus.value.message = response.data.message
-          addLog('INFO', response.data.message)
-          ElMessage.success(response.data.message)
+          mesWmsStatus.value.connected = response.data.success
+          mesWmsStatus.value.message = response.data.message
+          addLog('INFO', 'MES-WMS: ' + response.data.message)
+          ElMessage.success('MES-WMS: ' + response.data.message)
         } catch (error) {
-          ElMessage.error('连接失败')
-          addLog('ERROR', '连接失败: ' + error.message)
+          ElMessage.error('MES-WMS连接失败')
+          addLog('ERROR', 'MES-WMS连接失败: ' + error.message)
         } finally {
-          connecting.value = false
+          mesWmsConnecting.value = false
         }
       }
     }
     
-    // 重新连接
-    const reconnect = async () => {
-      try {
-        const response = await axios.post('/api/modbus/reconnect')
-        connectionStatus.value.connected = response.data.success
-        connectionStatus.value.message = response.data.message
-        addLog('INFO', response.data.message)
-        ElMessage.success(response.data.message)
-      } catch (error) {
-        ElMessage.error('重连失败')
-        addLog('ERROR', '重连失败: ' + error.message)
+    // 切换WMS-堆垛机连接状态
+    const toggleWmsStackerConnection = async () => {
+      if (wmsStackerStatus.value.connected) {
+        // 断开连接
+        try {
+          const response = await axios.post('/api/stacker-monitor/disconnect')
+          wmsStackerStatus.value.connected = false
+          wmsStackerStatus.value.message = 'WMS-堆垛机连接已断开'
+          addLog('INFO', 'WMS-堆垛机连接已断开')
+          ElMessage.success('WMS-堆垛机连接已断开')
+        } catch (error) {
+          ElMessage.error('断开WMS-堆垛机连接失败')
+          addLog('ERROR', '断开WMS-堆垛机连接失败: ' + error.message)
+        }
+      } else {
+        // 建立连接
+        wmsStackerConnecting.value = true
+        try {
+          const response = await axios.post('/api/stacker-monitor/connect', {
+            host: wmsStackerConfig.host,
+            port: wmsStackerConfig.port,
+            slaveId: wmsStackerConfig.slaveId
+          })
+          wmsStackerStatus.value.connected = response.data.success
+          wmsStackerStatus.value.message = response.data.message
+          addLog('INFO', 'WMS-堆垛机: ' + response.data.message)
+          ElMessage.success('WMS-堆垛机: ' + response.data.message)
+        } catch (error) {
+          ElMessage.error('WMS-堆垛机连接失败')
+          addLog('ERROR', 'WMS-堆垛机连接失败: ' + error.message)
+        } finally {
+          wmsStackerConnecting.value = false
+        }
       }
     }
     
@@ -343,22 +461,27 @@ export default {
     }
     
     onMounted(() => {
-      checkConnection()
+      checkMesWmsConnection()
+      checkWmsStackerConnection()
     })
     
     return {
-      connectionStatus,
-      connectionConfig,
-      connecting,
+      mesWmsStatus,
+      mesWmsConfig,
+      mesWmsConnecting,
+      wmsStackerStatus,
+      wmsStackerConfig,
+      wmsStackerConnecting,
       readForm,
       writeForm,
       readResult,
       reading,
       writing,
       logs,
-      checkConnection,
-      toggleConnection,
-      reconnect,
+      checkMesWmsConnection,
+      checkWmsStackerConnection,
+      toggleMesWmsConnection,
+      toggleWmsStackerConnection,
       readRegisters,
       writeRegister,
       clearLogs,

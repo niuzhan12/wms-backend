@@ -2,11 +2,13 @@ package com.wms.config;
 
 import com.wms.entity.*;
 import com.wms.repository.*;
+import com.wms.service.MesWmsIntegrationService;
+import com.wms.service.WmsStackerIntegrationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import java.util.Arrays;
+import java.util.List;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -27,7 +29,10 @@ public class DataInitializer implements CommandLineRunner {
     private UserRepository userRepository;
     
     @Autowired
-    private PasswordEncoder passwordEncoder;
+    private MesWmsIntegrationService mesWmsIntegrationService;
+    
+    @Autowired
+    private WmsStackerIntegrationService wmsStackerIntegrationService;
     
     @Override
     public void run(String... args) throws Exception {
@@ -51,6 +56,26 @@ public class DataInitializer implements CommandLineRunner {
             System.out.println("数据库初始化完成！");
         } else {
             System.out.println("数据库已存在数据，跳过初始化。");
+        }
+        
+        // 系统启动时清理设备状态，确保没有残留的执行状态
+        cleanupDeviceStatus();
+        
+        // 初始化MES-WMS和WMS-堆垛机状态
+        try {
+            System.out.println("正在初始化MES-WMS状态...");
+            mesWmsIntegrationService.initializeMesWmsStatus();
+            System.out.println("MES-WMS状态初始化完成");
+        } catch (Exception e) {
+            System.err.println("MES-WMS状态初始化失败: " + e.getMessage());
+        }
+        
+        try {
+            System.out.println("正在初始化WMS-堆垛机状态...");
+            wmsStackerIntegrationService.initializeWmsStackerStatus();
+            System.out.println("WMS-堆垛机状态初始化完成");
+        } catch (Exception e) {
+            System.err.println("WMS-堆垛机状态初始化失败: " + e.getMessage());
         }
     }
     
@@ -164,6 +189,24 @@ public class DataInitializer implements CommandLineRunner {
             System.out.println("默认用户创建完成：");
             System.out.println("管理员 - 用户名: admin, 密码: admin123");
             System.out.println("普通用户 - 用户名: user, 密码: user123");
+        }
+    }
+    
+    private void cleanupDeviceStatus() {
+        try {
+            // 清理所有设备状态，确保没有残留的执行状态
+            List<DeviceStatus> allStatuses = deviceStatusRepository.findAll();
+            for (DeviceStatus status : allStatuses) {
+                status.setStatus(DeviceStatus.Status.IDLE);
+                status.setCurrentRow(0);
+                status.setCurrentColumn(0);
+                status.setRemoteWorking(false);
+                status.setFileExecuting(false);
+                deviceStatusRepository.save(status);
+            }
+            System.out.println("设备状态清理完成，所有设备已重置为空闲状态");
+        } catch (Exception e) {
+            System.err.println("清理设备状态失败: " + e.getMessage());
         }
     }
 }

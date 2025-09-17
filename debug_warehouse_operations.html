@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>库位操作调试工具</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        .step { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #f9f9f9; }
+        .important { background: #fff3cd; border-color: #ffeaa7; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 3px; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f2f2f2; }
+        .warehouse-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin: 20px 0; }
+        .location-cell { padding: 10px; border: 1px solid #ddd; text-align: center; background: #f8f9fa; }
+        .location-cell.has-pallet { background: #d4edda; }
+        .location-cell.empty { background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>库位操作调试工具</h1>
+    
+    <div class="step important">
+        <h2>🔍 问题诊断</h2>
+        <p>您报告说出入库时直接操作了两个库位，这不应该发生。让我们检查一下可能的原因：</p>
+        <ul>
+            <li>监控频率过高，导致重复处理</li>
+            <li>MES订单没有及时清除</li>
+            <li>数据库事务问题</li>
+            <li>Modbus连接不稳定</li>
+        </ul>
+    </div>
+    
+    <div class="step">
+        <h2>1. 检查当前库位状态</h2>
+        <button onclick="checkWarehouseStatus()">检查库位状态</button>
+        <div id="warehouseResult" class="result" style="display:none;"></div>
+        <div id="warehouseGrid" class="warehouse-grid"></div>
+    </div>
+    
+    <div class="step">
+        <h2>2. 检查MES-WMS状态</h2>
+        <button onclick="checkMesWmsStatus()">检查MES-WMS状态</button>
+        <div id="mesWmsResult" class="result" style="display:none;"></div>
+    </div>
+    
+    <div class="step">
+        <h2>3. 测试出库操作</h2>
+        <button onclick="testOutbound()">测试出库操作</button>
+        <div id="outboundResult" class="result" style="display:none;"></div>
+    </div>
+    
+    <div class="step">
+        <h2>4. 测试入库操作</h2>
+        <button onclick="testInbound()">测试入库操作</button>
+        <div id="inboundResult" class="result" style="display:none;"></div>
+    </div>
+    
+    <div class="step">
+        <h2>5. 监控日志</h2>
+        <button onclick="startMonitoring()">开始监控</button>
+        <button onclick="stopMonitoring()">停止监控</button>
+        <div id="monitoringResult" class="result" style="display:none;"></div>
+        <div id="logContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-top: 10px;"></div>
+    </div>
+    
+    <script>
+        let monitoringInterval = null;
+        let logCount = 0;
+        
+        async function checkWarehouseStatus() {
+            const resultDiv = document.getElementById('warehouseResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div class="info">正在检查库位状态...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/mes-wms/status');
+                const data = await response.json();
+                
+                if (data.locationStatus) {
+                    resultDiv.innerHTML = '<div class="success">✅ 库位状态获取成功</div>';
+                    displayWarehouseGrid(data.locationStatus);
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ 库位状态获取失败</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ 检查库位状态时出错: ' + error.message + '</div>';
+            }
+        }
+        
+        function displayWarehouseGrid(locationStatus) {
+            const gridDiv = document.getElementById('warehouseGrid');
+            gridDiv.innerHTML = '';
+            
+            for (let row = 1; row <= 5; row++) {
+                for (let col = 1; col <= 6; col++) {
+                    const locationKey = `location${(row - 1) * 6 + col}`;
+                    const hasPallet = locationStatus[locationKey] === 1;
+                    
+                    const cell = document.createElement('div');
+                    cell.className = `location-cell ${hasPallet ? 'has-pallet' : 'empty'}`;
+                    cell.innerHTML = `${row}行${col}列<br>${hasPallet ? '有料' : '空'}`;
+                    gridDiv.appendChild(cell);
+                }
+            }
+        }
+        
+        async function checkMesWmsStatus() {
+            const resultDiv = document.getElementById('mesWmsResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div class="info">正在检查MES-WMS状态...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/mes-wms/status');
+                const data = await response.json();
+                
+                resultDiv.innerHTML = '<div class="info">MES-WMS状态:<br><pre>' + JSON.stringify(data, null, 2) + '</pre></div>';
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ 检查MES-WMS状态时出错: ' + error.message + '</div>';
+            }
+        }
+        
+        async function testOutbound() {
+            const resultDiv = document.getElementById('outboundResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div class="info">正在测试出库操作...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/mes-wms-flow/check-and-execute', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = '<div class="success">✅ 出库操作测试成功<br>结果: ' + JSON.stringify(data) + '</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ 出库操作测试失败: ' + data.message + '</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ 测试出库操作时出错: ' + error.message + '</div>';
+            }
+        }
+        
+        async function testInbound() {
+            const resultDiv = document.getElementById('inboundResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div class="info">正在测试入库操作...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/mes-wms-flow/check-and-execute', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = '<div class="success">✅ 入库操作测试成功<br>结果: ' + JSON.stringify(data) + '</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ 入库操作测试失败: ' + data.message + '</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ 测试入库操作时出错: ' + error.message + '</div>';
+            }
+        }
+        
+        function startMonitoring() {
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+            }
+            
+            const resultDiv = document.getElementById('monitoringResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div class="info">开始监控，每3秒检查一次...</div>';
+            
+            monitoringInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('http://localhost:8080/api/mes-wms-flow/check-and-execute', {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    
+                    const logDiv = document.getElementById('logContainer');
+                    const timestamp = new Date().toLocaleTimeString();
+                    logCount++;
+                    
+                    const logEntry = document.createElement('div');
+                    logEntry.innerHTML = `[${timestamp}] #${logCount} - ${data.success ? '成功' : '失败'}: ${data.message}`;
+                    if (data.operation) {
+                        logEntry.innerHTML += ` - 操作: ${data.operation === 'inbound' ? '入库' : '出库'}`;
+                    }
+                    if (data.row && data.column) {
+                        logEntry.innerHTML += ` - 位置: ${data.row}行${data.column}列`;
+                    }
+                    
+                    logDiv.insertBefore(logEntry, logDiv.firstChild);
+                    
+                    // 限制日志数量
+                    while (logDiv.children.length > 20) {
+                        logDiv.removeChild(logDiv.lastChild);
+                    }
+                } catch (error) {
+                    console.error('监控出错:', error);
+                }
+            }, 3000);
+        }
+        
+        function stopMonitoring() {
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+                monitoringInterval = null;
+                
+                const resultDiv = document.getElementById('monitoringResult');
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = '<div class="info">已停止监控</div>';
+            }
+        }
+        
+        // 页面加载时自动检查
+        window.onload = function() {
+            checkWarehouseStatus();
+            checkMesWmsStatus();
+        };
+    </script>
+</body>
+</html>

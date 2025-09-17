@@ -8,6 +8,7 @@
         <el-button type="warning" @click="stopMonitoring" :disabled="!isMonitoring">停止监控</el-button>
         <el-button type="info" @click="updateLocationStatus">更新库位状态</el-button>
         <el-button type="warning" @click="refreshStatus">刷新状态</el-button>
+        <el-button type="danger" @click="forceResetAll">强制重置</el-button>
       </div>
     </div>
     
@@ -316,6 +317,29 @@ export default {
       }
     }
     
+    // 强制重置所有状态
+    const forceResetAll = async () => {
+      loading.value = true
+      try {
+        addLog('INFO', '开始强制重置所有状态...')
+        const response = await axios.post('/api/mes-wms/reset-all')
+        
+        if (response.data.success) {
+          addLog('SUCCESS', response.data.message)
+          ElMessage.success('强制重置成功')
+          await refreshStatus()
+        } else {
+          addLog('ERROR', response.data.message)
+          ElMessage.error(response.data.message)
+        }
+      } catch (error) {
+        addLog('ERROR', '强制重置失败: ' + error.message)
+        ElMessage.error('强制重置失败: ' + error.message)
+      } finally {
+        loading.value = false
+      }
+    }
+    
     // 获取库位样式类
     const getLocationClass = (row, col) => {
       const locationKey = `location${(row - 1) * 6 + col}`
@@ -424,7 +448,7 @@ export default {
         } catch (error) {
           addLog('ERROR', '监控出错: ' + error.message)
         }
-      }, 2000) // 每2秒检查一次
+      }, 5000) // 每5秒检查一次，避免重复处理
     }
     
     // 停止监控
@@ -472,6 +496,7 @@ export default {
         ElMessage.error('加载历史日志失败: ' + error.message)
       }
     }
+    
     
     // 导出日志
     const exportLogs = () => {
@@ -546,6 +571,7 @@ export default {
       updateLocationStatus,
       checkOrders,
       refreshStatus,
+      forceResetAll,
       getLocationClass,
       getLocationStatus,
       addLog,

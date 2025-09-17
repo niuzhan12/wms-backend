@@ -3,6 +3,7 @@ package com.wms.service;
 import com.wms.entity.WarehouseLocation;
 import com.wms.repository.WarehouseLocationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -20,6 +21,12 @@ public class MesWmsFlowService {
     
     @Autowired
     private OperationLogService operationLogService;
+    
+    @Autowired
+    private WmsStackerIntegrationService wmsStackerIntegrationService;
+    
+    // 防止重复处理的标记
+    private volatile boolean isProcessing = false;
     
     // MES-WMS交互寄存器地址定义
     private static final int WMS_MODE = 4001;           // WMS模式 (0:本地, 1:远程)
@@ -98,6 +105,14 @@ public class MesWmsFlowService {
     public Map<String, Object> checkAndExecuteOrders() {
         Map<String, Object> result = new HashMap<>();
         
+        // 防止重复处理
+        if (isProcessing) {
+            result.put("success", true);
+            result.put("message", "正在处理中，跳过本次检查");
+            result.put("hasOrder", false);
+            return result;
+        }
+        
         if (!modbusService.isConnected()) {
             result.put("success", false);
             result.put("message", "Modbus连接未建立");
@@ -116,12 +131,26 @@ public class MesWmsFlowService {
             int outboundOrder = orderValues[0]; // 4007
             int inboundOrder = orderValues[1];  // 4008
             
+            System.out.println("DEBUG: 检查MES订单 - 出库订单:" + outboundOrder + ", 入库订单:" + inboundOrder);
+            
             if (outboundOrder == 1) {
                 // 执行出库流程
-                return executeOutboundFlow();
+                System.out.println("DEBUG: 检测到出库订单，开始执行出库流程");
+                isProcessing = true;
+                try {
+                    return executeOutboundFlow();
+                } finally {
+                    isProcessing = false;
+                }
             } else if (inboundOrder == 1) {
                 // 执行入库流程
-                return executeInboundFlow();
+                System.out.println("DEBUG: 检测到入库订单，开始执行入库流程");
+                isProcessing = true;
+                try {
+                    return executeInboundFlow();
+                } finally {
+                    isProcessing = false;
+                }
             } else {
                 result.put("success", true);
                 result.put("message", "无MES订单");
@@ -150,6 +179,8 @@ public class MesWmsFlowService {
     private Map<String, Object> executeOutboundFlow() {
         Map<String, Object> result = new HashMap<>();
         
+        System.out.println("DEBUG: 开始执行出库流程");
+        
         try {
             // 1. 设置WMS出库中状态 (4003 = 1)
             modbusService.writeSingleRegister(WMS_OUTBOUND_PROGRESS, 1);
@@ -168,48 +199,26 @@ public class MesWmsFlowService {
                         String.format("开始执行出库 - 位置: %d行%d列", location.getRowNumber(), location.getColumnNumber()), 
                         "出库流程");
                     
-                    // 执行出库
-                    location.setHasPallet(false);
-                    location.setPalletCode(null);
-                    location.setMaterialCode(null);
-                    location.setMaterialStatus(null);
-                    locationRepository.save(location);
+                    // 通过堆垛机执行出库操作（WMS只下发指令，不直接操作库位）
+                    Map<String, Object> stackerResult = wmsStackerIntegrationService.executeOutboundFlow(
+                        location.getRowNumber(), location.getColumnNumber());
                     
-                    // 4. 设置出库完成状态 (4005 = 1)
-                    modbusService.writeSingleRegister(WMS_OUTBOUND_COMPLETE, 1);
+                    if (!(Boolean) stackerResult.get("success")) {
+                        result.put("success", false);
+                        result.put("message", "下发出库指令到堆垛机失败: " + stackerResult.get("message"));
+                        return result;
+                    }
                     
-                    // 注意：4007由MES负责清除，WMS不主动清除
-                    
-                    // 6. 结束出库中状态 (4003 = 0)
-                    modbusService.writeSingleRegister(WMS_OUTBOUND_PROGRESS, 0);
-                    
-                    // 7. 结束出库完成状态 (4005 = 0)
-                    modbusService.writeSingleRegister(WMS_OUTBOUND_COMPLETE, 0);
-                    
-                    // 8. 设置WMS空闲 (4002 = 0)
-                    modbusService.writeSingleRegister(WMS_BUSY, 0);
-                    
-                    // 延迟清除当前执行位置，让用户能看到执行结果
-                    new Thread(() -> {
-                        try {
-                            Thread.sleep(3000); // 等待3秒
-                            modbusService.writeSingleRegister(WMS_CURRENT_ROW, 0);
-                            modbusService.writeSingleRegister(WMS_CURRENT_COLUMN, 0);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }).start();
-                    
-                    // 记录出库成功日志
-                    operationLogService.saveMesWmsLog("SUCCESS", 
-                        String.format("出库流程执行成功 - 位置: %d行%d列", location.getRowNumber(), location.getColumnNumber()), 
-                        "出库流程");
+                    // WMS不直接操作库位，等待堆垛机完成后再更新
+                    System.out.println("DEBUG: 出库指令已下发到堆垛机，等待堆垛机完成");
                     
                     result.put("success", true);
-                    result.put("message", "出库流程执行成功");
+                    result.put("message", "出库指令已下发到堆垛机，等待堆垛机完成");
                     result.put("row", location.getRowNumber());
                     result.put("column", location.getColumnNumber());
                     result.put("operation", "outbound");
+                    
+                    System.out.println("DEBUG: 出库指令已下发到堆垛机，位置: " + location.getRowNumber() + "行" + location.getColumnNumber() + "列");
                     return result;
                 }
             }
@@ -217,7 +226,8 @@ public class MesWmsFlowService {
             // 没有找到有料的库位
             modbusService.writeSingleRegister(WMS_OUTBOUND_PROGRESS, 0);
             modbusService.writeSingleRegister(WMS_BUSY, 0);
-            // 注意：4007由MES负责清除，WMS不主动清除
+            // 清除MES出库订单 (4007 = 0) - WMS主动清除
+            modbusService.writeSingleRegister(MES_OUTBOUND_ORDER, 0);
             
             operationLogService.saveMesWmsLog("WARNING", "出库流程执行失败 - 没有找到有料的库位", "出库流程");
             
@@ -228,7 +238,8 @@ public class MesWmsFlowService {
             // 出错时清理状态
             modbusService.writeSingleRegister(WMS_OUTBOUND_PROGRESS, 0);
             modbusService.writeSingleRegister(WMS_BUSY, 0);
-            // 注意：4007由MES负责清除，WMS不主动清除
+            // 清除MES出库订单 (4007 = 0) - WMS主动清除
+            modbusService.writeSingleRegister(MES_OUTBOUND_ORDER, 0);
             
             result.put("success", false);
             result.put("message", "执行出库流程失败: " + e.getMessage());
@@ -269,48 +280,26 @@ public class MesWmsFlowService {
                         String.format("开始执行入库 - 位置: %d行%d列", location.getRowNumber(), location.getColumnNumber()), 
                         "入库流程");
                     
-                    // 执行入库（简化操作，不填具体物品和托盘信息）
-                    location.setHasPallet(true);
-                    location.setPalletCode("AUTO-" + System.currentTimeMillis());
-                    location.setMaterialCode("MATERIAL-" + System.currentTimeMillis());
-                    location.setMaterialStatus(WarehouseLocation.MaterialStatus.RAW);
-                    locationRepository.save(location);
+                    // 通过堆垛机执行入库操作（WMS只下发指令，不直接操作库位）
+                    Map<String, Object> stackerResult = wmsStackerIntegrationService.executeInboundFlow(
+                        location.getRowNumber(), location.getColumnNumber());
                     
-                    // 4. 设置入库完成状态 (4006 = 1)
-                    modbusService.writeSingleRegister(WMS_INBOUND_COMPLETE, 1);
+                    if (!(Boolean) stackerResult.get("success")) {
+                        result.put("success", false);
+                        result.put("message", "下发入库指令到堆垛机失败: " + stackerResult.get("message"));
+                        return result;
+                    }
                     
-                    // 注意：4008由MES负责清除，WMS不主动清除
-                    
-                    // 6. 结束入库中状态 (4004 = 0)
-                    modbusService.writeSingleRegister(WMS_INBOUND_PROGRESS, 0);
-                    
-                    // 7. 结束入库完成状态 (4006 = 0)
-                    modbusService.writeSingleRegister(WMS_INBOUND_COMPLETE, 0);
-                    
-                    // 8. 设置WMS空闲 (4002 = 0)
-                    modbusService.writeSingleRegister(WMS_BUSY, 0);
-                    
-                    // 延迟清除当前执行位置，让用户能看到执行结果
-                    new Thread(() -> {
-                        try {
-                            Thread.sleep(3000); // 等待3秒
-                            modbusService.writeSingleRegister(WMS_CURRENT_ROW, 0);
-                            modbusService.writeSingleRegister(WMS_CURRENT_COLUMN, 0);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }).start();
-                    
-                    // 记录入库成功日志
-                    operationLogService.saveMesWmsLog("SUCCESS", 
-                        String.format("入库流程执行成功 - 位置: %d行%d列", location.getRowNumber(), location.getColumnNumber()), 
-                        "入库流程");
+                    // WMS不直接操作库位，等待堆垛机完成后再更新
+                    System.out.println("DEBUG: 入库指令已下发到堆垛机，等待堆垛机完成");
                     
                     result.put("success", true);
-                    result.put("message", "入库流程执行成功");
+                    result.put("message", "入库指令已下发到堆垛机，等待堆垛机完成");
                     result.put("row", location.getRowNumber());
                     result.put("column", location.getColumnNumber());
                     result.put("operation", "inbound");
+                    
+                    System.out.println("DEBUG: 入库指令已下发到堆垛机，位置: " + location.getRowNumber() + "行" + location.getColumnNumber() + "列");
                     return result;
                 }
             }
@@ -318,7 +307,8 @@ public class MesWmsFlowService {
             // 没有找到空闲的库位
             modbusService.writeSingleRegister(WMS_INBOUND_PROGRESS, 0);
             modbusService.writeSingleRegister(WMS_BUSY, 0);
-            // 注意：4008由MES负责清除，WMS不主动清除
+            // 清除MES入库订单 (4008 = 0) - WMS主动清除
+            modbusService.writeSingleRegister(MES_INBOUND_ORDER, 0);
             
             result.put("success", false);
             result.put("message", "没有找到空闲的库位");
@@ -327,7 +317,8 @@ public class MesWmsFlowService {
             // 出错时清理状态
             modbusService.writeSingleRegister(WMS_INBOUND_PROGRESS, 0);
             modbusService.writeSingleRegister(WMS_BUSY, 0);
-            // 注意：4008由MES负责清除，WMS不主动清除
+            // 清除MES入库订单 (4008 = 0) - WMS主动清除
+            modbusService.writeSingleRegister(MES_INBOUND_ORDER, 0);
             
             result.put("success", false);
             result.put("message", "执行入库流程失败: " + e.getMessage());
@@ -376,5 +367,18 @@ public class MesWmsFlowService {
         }
         
         return status;
+    }
+    
+    /**
+     * 定期检查堆垛机完成状态
+     * 每2秒检查一次
+     */
+    @Scheduled(fixedRate = 2000)
+    public void checkStackerCompletion() {
+        try {
+            wmsStackerIntegrationService.checkStackerCompletion();
+        } catch (Exception e) {
+            System.err.println("检查堆垛机完成状态失败: " + e.getMessage());
+        }
     }
 }

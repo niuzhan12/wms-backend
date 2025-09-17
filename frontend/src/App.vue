@@ -73,6 +73,10 @@
                 <span>MES-WMS监控</span>
               </el-menu-item>
               
+              <el-menu-item index="stacker-monitor">
+                <el-icon><Van /></el-icon>
+                <span>堆垛机监控</span>
+              </el-menu-item>
               
             </template>
           </el-menu>
@@ -90,7 +94,7 @@
 <script>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Grid, Box, Goods, Monitor, Tools } from '@element-plus/icons-vue'
+import { Grid, Box, Goods, Monitor, Tools, Van } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { authService } from './services/auth'
 

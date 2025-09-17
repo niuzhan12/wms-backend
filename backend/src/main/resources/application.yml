@@ -25,3 +25,16 @@ logging:
     com.wms: DEBUG
     org.springframework.web: DEBUG
 
+# MES配置 (WMS作为Modbus Master连接MES)
+modbus:
+  host: 127.0.0.1
+  port: 502
+  slaveId: 1
+
+# 堆垛机配置 (WMS作为Modbus Master连接堆垛机)
+stacker:
+  ip: 127.0.0.1
+  port: 503
+  slaveId: 1
+  timeout: 5000
+

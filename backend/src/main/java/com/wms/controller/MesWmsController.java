@@ -157,11 +157,81 @@ public class MesWmsController {
     public ResponseEntity<Map<String, Object>> getStatus() {
         try {
             Map<String, Object> status = mesWmsIntegrationService.getMesWmsStatus();
+            System.out.println("DEBUG: 返回给前端的MES-WMS状态: " + status);
             return ResponseEntity.ok(status);
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("connected", false);
             result.put("message", "获取状态失败: " + e.getMessage());
+            System.out.println("DEBUG: 获取状态异常: " + e.getMessage());
+            return ResponseEntity.ok(result);
+        }
+    }
+    
+    /**
+     * 强制重置所有状态
+     */
+    @PostMapping("/reset-all")
+    public ResponseEntity<Map<String, Object>> resetAll() {
+        try {
+            // 强制清理所有Modbus寄存器
+            if (mesWmsIntegrationService.isModbusConnected()) {
+                mesWmsIntegrationService.forceResetAllRegisters();
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "所有状态已强制重置");
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", false);
+            result.put("message", "重置失败: " + e.getMessage());
+            return ResponseEntity.ok(result);
+        }
+    }
+    
+    /**
+     * 连接MES-WMS Modbus
+     */
+    @PostMapping("/connect")
+    public ResponseEntity<Map<String, Object>> connect(@RequestBody Map<String, Object> request) {
+        try {
+            String host = (String) request.get("host");
+            Integer port = (Integer) request.get("port");
+            Integer slaveId = (Integer) request.get("slaveId");
+            
+            // 这里可以添加连接逻辑，目前直接返回成功
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "MES-WMS Modbus连接成功");
+            result.put("connected", true);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", false);
+            result.put("message", "MES-WMS连接失败: " + e.getMessage());
+            result.put("connected", false);
+            return ResponseEntity.ok(result);
+        }
+    }
+    
+    /**
+     * 断开MES-WMS Modbus连接
+     */
+    @PostMapping("/disconnect")
+    public ResponseEntity<Map<String, Object>> disconnect() {
+        try {
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "MES-WMS Modbus连接已断开");
+            result.put("connected", false);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", false);
+            result.put("message", "断开MES-WMS连接失败: " + e.getMessage());
+            result.put("connected", false);
             return ResponseEntity.ok(result);
         }
     }

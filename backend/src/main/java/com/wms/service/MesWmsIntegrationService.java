@@ -19,17 +19,17 @@ public class MesWmsIntegrationService {
     private WarehouseLocationRepository locationRepository;
     
     // MES-WMS交互寄存器地址定义
-    private static final int WMS_MODE = 4001;           // WMS模式 (0:本地, 1:远程)
-    private static final int WMS_BUSY = 4002;           // WMS是否在忙 (0:空闲, 1:忙)
-    private static final int WMS_OUTBOUND_PROGRESS = 4003;  // WMS出库中 (0:空闲, 1:出库中)
-    private static final int WMS_INBOUND_PROGRESS = 4004;   // WMS入库中 (0:空闲, 1:入库中)
-    private static final int WMS_OUTBOUND_COMPLETE = 4005;  // WMS出库完成 (0:空闲, 1:完成)
-    private static final int WMS_INBOUND_COMPLETE = 4006;   // WMS入库完成 (0:空闲, 1:完成)
-    private static final int MES_OUTBOUND_ORDER = 4007;     // MES下单出库 (0:空闲, 1:出库)
-    private static final int MES_INBOUND_ORDER = 4008;      // MES下单入库 (0:空闲, 1:入库)
-    private static final int WMS_CURRENT_ROW = 4009;        // WMS当前执行的行
-    private static final int WMS_CURRENT_COLUMN = 4010;     // WMS当前执行的列
-    private static final int LOCATION_STATUS_START = 4011;  // 库位状态起始地址 (4011-4035)
+    public static final int WMS_MODE = 4001;           // WMS模式 (0:本地, 1:远程)
+    public static final int WMS_BUSY = 4002;           // WMS是否在忙 (0:空闲, 1:忙)
+    public static final int WMS_OUTBOUND_PROGRESS = 4003;  // WMS出库中 (0:空闲, 1:出库中)
+    public static final int WMS_INBOUND_PROGRESS = 4004;   // WMS入库中 (0:空闲, 1:入库中)
+    public static final int WMS_OUTBOUND_COMPLETE = 4005;  // WMS出库完成 (0:空闲, 1:完成)
+    public static final int WMS_INBOUND_COMPLETE = 4006;   // WMS入库完成 (0:空闲, 1:完成)
+    public static final int MES_OUTBOUND_ORDER = 4007;     // MES下单出库 (0:空闲, 1:出库)
+    public static final int MES_INBOUND_ORDER = 4008;      // MES下单入库 (0:空闲, 1:入库)
+    public static final int WMS_CURRENT_ROW = 4009;        // WMS当前执行的行
+    public static final int WMS_CURRENT_COLUMN = 4010;     // WMS当前执行的列
+    public static final int LOCATION_STATUS_START = 4011;  // 库位状态起始地址 (4011-4035)
     
     /**
      * 初始化MES-WMS交互状态
@@ -315,8 +315,10 @@ public class MesWmsIntegrationService {
         if (!modbusService.isConnected()) {
             status.put("connected", false);
             status.put("message", "Modbus连接未建立");
+            System.out.println("DEBUG: Modbus连接未建立，使用默认值");
         } else {
             status.put("connected", true);
+            System.out.println("DEBUG: Modbus连接正常");
         }
         
         try {
@@ -324,6 +326,11 @@ public class MesWmsIntegrationService {
             int[] values = null;
             if (modbusService.isConnected()) {
                 values = modbusService.readHoldingRegisters(4001, 10);
+                if (values != null) {
+                    System.out.println("DEBUG: 读取到Modbus寄存器值: " + java.util.Arrays.toString(values));
+                } else {
+                    System.out.println("DEBUG: 读取Modbus寄存器失败，返回null");
+                }
             }
             
             if (values != null && values.length >= 10) {
@@ -335,8 +342,21 @@ public class MesWmsIntegrationService {
                 status.put("wmsInboundComplete", values[5]); // 4006
                 status.put("mesOutboundOrder", values[6]); // 4007
                 status.put("mesInboundOrder", values[7]); // 4008
-                status.put("wmsCurrentRow", values[8]); // 4009
-                status.put("wmsCurrentColumn", values[9]); // 4010
+                // 确保当前执行位置只有在真正执行时才显示
+                int currentRow = values[8]; // 4009
+                int currentColumn = values[9]; // 4010
+                System.out.println("DEBUG: 当前执行位置 - 行:" + currentRow + ", 列:" + currentColumn);
+                System.out.println("DEBUG: WMS忙状态:" + values[1] + ", 出库中:" + values[2] + ", 入库中:" + values[3]);
+                // 只有在WMS忙状态或正在执行操作时才显示当前位置
+                if (values[1] == 1 || values[2] == 1 || values[3] == 1) {
+                    status.put("wmsCurrentRow", currentRow);
+                    status.put("wmsCurrentColumn", currentColumn);
+                    System.out.println("DEBUG: 显示执行位置 - 行:" + currentRow + ", 列:" + currentColumn);
+                } else {
+                    status.put("wmsCurrentRow", 0);
+                    status.put("wmsCurrentColumn", 0);
+                    System.out.println("DEBUG: 不显示执行位置，设置为0");
+                }
             } else {
                 // 如果Modbus连接失败，使用默认值
                 status.put("wmsMode", 0);
@@ -349,6 +369,7 @@ public class MesWmsIntegrationService {
                 status.put("mesInboundOrder", 0);
                 status.put("wmsCurrentRow", 0);
                 status.put("wmsCurrentColumn", 0);
+                System.out.println("DEBUG: 使用默认值，所有状态为0");
             }
             
             // 直接从MySQL获取库位状态
@@ -376,5 +397,50 @@ public class MesWmsIntegrationService {
         }
         
         return status;
+    }
+    
+    /**
+     * 检查Modbus连接状态
+     */
+    public boolean isModbusConnected() {
+        return modbusService.isConnected();
+    }
+    
+    /**
+     * 强制重置所有寄存器
+     */
+    public void forceResetAllRegisters() {
+        if (!modbusService.isConnected()) {
+            System.out.println("DEBUG: Modbus连接未建立，无法重置寄存器");
+            return;
+        }
+        
+        try {
+            System.out.println("DEBUG: 开始强制重置MES-WMS寄存器...");
+            
+            // 重置MES-WMS交互寄存器，但保持WMS_MODE为1（远程模式）
+            modbusService.writeSingleRegister(WMS_MODE, 1); // WMS模式保持为远程模式
+            modbusService.writeSingleRegister(WMS_BUSY, 0); // WMS是否在忙
+            modbusService.writeSingleRegister(WMS_OUTBOUND_PROGRESS, 0); // WMS出库中
+            modbusService.writeSingleRegister(WMS_INBOUND_PROGRESS, 0); // WMS入库中
+            modbusService.writeSingleRegister(WMS_OUTBOUND_COMPLETE, 0); // WMS出库完成
+            modbusService.writeSingleRegister(WMS_INBOUND_COMPLETE, 0); // WMS入库完成
+            modbusService.writeSingleRegister(MES_OUTBOUND_ORDER, 0); // MES下单出库
+            modbusService.writeSingleRegister(MES_INBOUND_ORDER, 0); // MES下单入库
+            modbusService.writeSingleRegister(WMS_CURRENT_ROW, 0); // WMS当前执行的行
+            modbusService.writeSingleRegister(WMS_CURRENT_COLUMN, 0); // WMS当前执行的列
+            
+            // 重置库位状态寄存器 (4011-4035)
+            for (int i = LOCATION_STATUS_START; i <= 4035; i++) {
+                boolean success = modbusService.writeSingleRegister(i, 0);
+                if (!success) {
+                    System.out.println("DEBUG: 重置库位状态寄存器 " + i + " 失败");
+                }
+            }
+            
+            System.out.println("DEBUG: MES-WMS寄存器已重置，WMS_MODE保持为1（远程模式）");
+        } catch (Exception e) {
+            System.err.println("强制重置寄存器失败: " + e.getMessage());
+        }
     }
 }
