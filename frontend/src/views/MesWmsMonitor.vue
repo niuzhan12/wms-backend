@@ -169,48 +169,6 @@
           />
         </div>
       </el-card>
-      
-      <!-- 流程说明 -->
-      <el-card class="flow-guide" style="margin-top: 20px;">
-        <template #header>
-          <div class="card-header">
-            <span>MES-WMS交互流程说明</span>
-          </div>
-        </template>
-        
-        <div class="flow-steps">
-          <div class="step">
-            <div class="step-number">1</div>
-            <div class="step-content">
-              <strong>初始化流程：</strong>4001设为1(WMS远程模式)，4002设为1(WMS忙状态)
-            </div>
-          </div>
-          <div class="step">
-            <div class="step-number">2</div>
-            <div class="step-content">
-              <strong>MES下单：</strong>4007/4008由0改为1(MES出库/入库订单)
-            </div>
-          </div>
-          <div class="step">
-            <div class="step-number">3</div>
-            <div class="step-content">
-              <strong>WMS执行：</strong>4003/4004由0改为1(WMS出库/入库中)，4009/4010设置实际行列
-            </div>
-          </div>
-          <div class="step">
-            <div class="step-number">4</div>
-            <div class="step-content">
-              <strong>完成操作：</strong>4005/4006由0改为1(出库/入库完成)
-            </div>
-          </div>
-          <div class="step">
-            <div class="step-number">5</div>
-            <div class="step-content">
-              <strong>清理状态：</strong>4007/4008设为0，4003/4004设为0，4005/4006设为0，4002设为0
-            </div>
-          </div>
-        </div>
-      </el-card>
     </div>
   </div>
 </template>
@@ -310,8 +268,42 @@ export default {
       try {
         const response = await axios.get('/api/mes-wms/status')
         status.value = response.data
+        
+        // 如果MES-WMS显示未连接，但localStorage中有连接状态，尝试恢复
+        if (!status.value.connected) {
+          const savedStatus = localStorage.getItem('mesWmsConnectionStatus')
+          if (savedStatus) {
+            try {
+              const parsed = JSON.parse(savedStatus)
+              if (parsed.connected) {
+                console.log('检测到localStorage中的连接状态，尝试恢复显示')
+                status.value.connected = true
+                status.value.message = '连接状态已从缓存恢复'
+              }
+            } catch (e) {
+              console.error('解析localStorage状态失败:', e)
+            }
+          }
+        }
+        
         console.log('MES-WMS状态已刷新:', status.value)
       } catch (error) {
+        // 如果请求失败，尝试从localStorage恢复状态
+        const savedStatus = localStorage.getItem('mesWmsConnectionStatus')
+        if (savedStatus) {
+          try {
+            const parsed = JSON.parse(savedStatus)
+            if (parsed.connected) {
+              console.log('网络请求失败，从localStorage恢复连接状态')
+              status.value.connected = true
+              status.value.message = '连接状态已从缓存恢复（网络异常）'
+              return
+            }
+          } catch (e) {
+            console.error('解析localStorage状态失败:', e)
+          }
+        }
+        
         ElMessage.error('刷新状态失败: ' + error.message)
         console.error(error)
       }
@@ -543,8 +535,30 @@ export default {
     }
     
     
+    // 从localStorage恢复连接状态
+    const restoreConnectionState = () => {
+      try {
+        const savedStatus = localStorage.getItem('mesWmsConnectionStatus')
+        if (savedStatus) {
+          const parsed = JSON.parse(savedStatus)
+          if (parsed.connected) {
+            console.log('从localStorage恢复MES-WMS连接状态')
+            status.value.connected = true
+            status.value.message = parsed.message || '连接状态已恢复'
+          }
+        }
+      } catch (error) {
+        console.error('恢复连接状态失败:', error)
+      }
+    }
+
     onMounted(() => {
+      // 先尝试从localStorage恢复连接状态
+      restoreConnectionState()
+      
+      // 然后刷新实际状态
       refreshStatus()
+      
       // 每5秒自动刷新状态
       setInterval(refreshStatus, 5000)
     })
@@ -753,39 +767,6 @@ export default {
   padding: 20px;
 }
 
-.flow-guide {
-  margin-top: 20px;
-}
-
-.flow-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.step {
-  display: flex;
-  align-items: flex-start;
-  gap: 15px;
-}
-
-.step-number {
-  width: 30px;
-  height: 30px;
-  background-color: #409eff;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  flex-shrink: 0;
-}
-
-.step-content {
-  flex: 1;
-  line-height: 1.6;
-}
 
 .log-pagination {
   margin-top: 15px;

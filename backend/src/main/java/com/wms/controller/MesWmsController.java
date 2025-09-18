@@ -197,15 +197,36 @@ public class MesWmsController {
     @PostMapping("/connect")
     public ResponseEntity<Map<String, Object>> connect(@RequestBody Map<String, Object> request) {
         try {
+            // 获取连接参数（用于日志记录）
             String host = (String) request.get("host");
             Integer port = (Integer) request.get("port");
             Integer slaveId = (Integer) request.get("slaveId");
             
-            // 这里可以添加连接逻辑，目前直接返回成功
+            System.out.println("MES-WMS连接请求: " + host + ":" + port + " (从站ID:" + slaveId + ")");
+            
+            // 检查是否已经连接
+            Map<String, Object> currentStatus = mesWmsIntegrationService.getMesWmsStatus();
+            if ((Boolean) currentStatus.get("connected")) {
+                Map<String, Object> result = new HashMap<>();
+                result.put("success", true);
+                result.put("message", "MES-WMS Modbus已连接");
+                result.put("connected", true);
+                return ResponseEntity.ok(result);
+            }
+            
+            // 尝试建立连接
+            boolean connected = mesWmsIntegrationService.connectModbus(host, port, slaveId);
+            
             Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("message", "MES-WMS Modbus连接成功");
-            result.put("connected", true);
+            if (connected) {
+                result.put("success", true);
+                result.put("message", "MES-WMS Modbus连接成功");
+                result.put("connected", true);
+            } else {
+                result.put("success", false);
+                result.put("message", "MES-WMS Modbus连接失败");
+                result.put("connected", false);
+            }
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();

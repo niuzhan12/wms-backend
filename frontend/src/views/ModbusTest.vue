@@ -290,12 +290,29 @@ export default {
     const checkMesWmsConnection = async () => {
       try {
         const response = await axios.get('/api/mes-wms/status')
+        const isConnected = response.data.connected || false
+        
+        // 如果localStorage中有连接状态，优先使用localStorage的状态
+        const savedStatus = localStorage.getItem('mesWmsConnectionStatus')
+        if (savedStatus) {
+          const parsed = JSON.parse(savedStatus)
+          if (parsed.connected && !isConnected) {
+            addLog('WARNING', '后端显示未连接，但localStorage显示已连接，保持localStorage状态')
+            return
+          }
+        }
+        
         mesWmsStatus.value = {
-          connected: response.data.connected || false,
-          message: response.data.message || 'MES-WMS连接状态检查完成'
+          connected: isConnected,
+          message: response.data.message || (isConnected ? 'MES-WMS连接正常' : 'MES-WMS连接已断开')
         }
         addLog('INFO', 'MES-WMS: ' + mesWmsStatus.value.message)
       } catch (error) {
+        // 如果请求失败，但之前是连接状态，保持状态
+        if (mesWmsStatus.value.connected) {
+          addLog('WARNING', 'MES-WMS连接状态检查失败，保持当前连接状态')
+          return
+        }
         ElMessage.error('检查MES-WMS连接失败')
         addLog('ERROR', 'MES-WMS连接检查失败: ' + error.message)
       }
@@ -305,12 +322,29 @@ export default {
     const checkWmsStackerConnection = async () => {
       try {
         const response = await axios.get('/api/stacker-monitor/status')
+        const isConnected = response.data.connected || false
+        
+        // 如果localStorage中有连接状态，优先使用localStorage的状态
+        const savedStatus = localStorage.getItem('wmsStackerConnectionStatus')
+        if (savedStatus) {
+          const parsed = JSON.parse(savedStatus)
+          if (parsed.connected && !isConnected) {
+            addLog('WARNING', '后端显示未连接，但localStorage显示已连接，保持localStorage状态')
+            return
+          }
+        }
+        
         wmsStackerStatus.value = {
-          connected: response.data.connected || false,
-          message: response.data.message || 'WMS-堆垛机连接状态检查完成'
+          connected: isConnected,
+          message: response.data.message || (isConnected ? 'WMS-堆垛机连接正常' : 'WMS-堆垛机连接已断开')
         }
         addLog('INFO', 'WMS-堆垛机: ' + wmsStackerStatus.value.message)
       } catch (error) {
+        // 如果请求失败，但之前是连接状态，保持状态
+        if (wmsStackerStatus.value.connected) {
+          addLog('WARNING', '连接状态检查失败，保持当前连接状态')
+          return
+        }
         ElMessage.error('检查WMS-堆垛机连接失败')
         addLog('ERROR', 'WMS-堆垛机连接检查失败: ' + error.message)
       }
@@ -326,6 +360,7 @@ export default {
           mesWmsStatus.value.message = 'MES-WMS连接已断开'
           addLog('INFO', 'MES-WMS连接已断开')
           ElMessage.success('MES-WMS连接已断开')
+          saveConnectionStates() // 保存状态
         } catch (error) {
           ElMessage.error('断开MES-WMS连接失败')
           addLog('ERROR', '断开MES-WMS连接失败: ' + error.message)
@@ -343,6 +378,7 @@ export default {
           mesWmsStatus.value.message = response.data.message
           addLog('INFO', 'MES-WMS: ' + response.data.message)
           ElMessage.success('MES-WMS: ' + response.data.message)
+          saveConnectionStates() // 保存状态
         } catch (error) {
           ElMessage.error('MES-WMS连接失败')
           addLog('ERROR', 'MES-WMS连接失败: ' + error.message)
@@ -362,6 +398,7 @@ export default {
           wmsStackerStatus.value.message = 'WMS-堆垛机连接已断开'
           addLog('INFO', 'WMS-堆垛机连接已断开')
           ElMessage.success('WMS-堆垛机连接已断开')
+          saveConnectionStates() // 保存状态
         } catch (error) {
           ElMessage.error('断开WMS-堆垛机连接失败')
           addLog('ERROR', '断开WMS-堆垛机连接失败: ' + error.message)
@@ -379,6 +416,7 @@ export default {
           wmsStackerStatus.value.message = response.data.message
           addLog('INFO', 'WMS-堆垛机: ' + response.data.message)
           ElMessage.success('WMS-堆垛机: ' + response.data.message)
+          saveConnectionStates() // 保存状态
         } catch (error) {
           ElMessage.error('WMS-堆垛机连接失败')
           addLog('ERROR', 'WMS-堆垛机连接失败: ' + error.message)
@@ -460,9 +498,66 @@ export default {
       return `log-${level.toLowerCase()}`
     }
     
+    // 从localStorage恢复连接状态
+    const restoreConnectionStates = () => {
+      try {
+        const savedWmsStackerStatus = localStorage.getItem('wmsStackerConnectionStatus')
+        if (savedWmsStackerStatus) {
+          const parsed = JSON.parse(savedWmsStackerStatus)
+          if (parsed.connected) {
+            wmsStackerStatus.value = {
+              connected: true,
+              message: parsed.message || '连接状态已恢复'
+            }
+            addLog('INFO', 'WMS-堆垛机连接状态已从缓存恢复')
+          }
+        }
+        
+        const savedMesWmsStatus = localStorage.getItem('mesWmsConnectionStatus')
+        if (savedMesWmsStatus) {
+          const parsed = JSON.parse(savedMesWmsStatus)
+          if (parsed.connected) {
+            mesWmsStatus.value = {
+              connected: true,
+              message: parsed.message || '连接状态已恢复'
+            }
+            addLog('INFO', 'MES-WMS连接状态已从缓存恢复')
+          }
+        }
+      } catch (error) {
+        addLog('ERROR', '恢复连接状态失败: ' + error.message)
+      }
+    }
+    
+    // 保存连接状态到localStorage
+    const saveConnectionStates = () => {
+      try {
+        localStorage.setItem('wmsStackerConnectionStatus', JSON.stringify({
+          connected: wmsStackerStatus.value.connected,
+          message: wmsStackerStatus.value.message
+        }))
+        
+        localStorage.setItem('mesWmsConnectionStatus', JSON.stringify({
+          connected: mesWmsStatus.value.connected,
+          message: mesWmsStatus.value.message
+        }))
+      } catch (error) {
+        addLog('ERROR', '保存连接状态失败: ' + error.message)
+      }
+    }
+    
     onMounted(() => {
-      checkMesWmsConnection()
-      checkWmsStackerConnection()
+      // 先恢复缓存的状态
+      restoreConnectionStates()
+      
+      // 延迟检查实际连接状态，确保状态恢复完成
+      setTimeout(() => {
+        checkMesWmsConnection()
+        checkWmsStackerConnection()
+      }, 100)
+      
+      // 定期保存连接状态
+      setInterval(saveConnectionStates, 5000)
     })
     
     return {

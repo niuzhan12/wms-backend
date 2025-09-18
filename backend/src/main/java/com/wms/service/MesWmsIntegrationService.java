@@ -32,6 +32,26 @@ public class MesWmsIntegrationService {
     public static final int LOCATION_STATUS_START = 4011;  // 库位状态起始地址 (4011-4035)
     
     /**
+     * 连接Modbus
+     */
+    public boolean connectModbus(String host, int port, int slaveId) {
+        try {
+            modbusService.connect(host, port, slaveId);
+            return modbusService.isConnected();
+        } catch (Exception e) {
+            System.err.println("连接Modbus失败: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 检查Modbus连接状态
+     */
+    public boolean isModbusConnected() {
+        return modbusService.isConnected();
+    }
+    
+    /**
      * 初始化MES-WMS交互状态
      */
     public void initializeMesWmsStatus() {
@@ -376,17 +396,45 @@ public class MesWmsIntegrationService {
             List<WarehouseLocation> locations = locationRepository.findByWarehouseCodeOrderByRowNumberAscColumnNumberAsc("A");
             Map<String, Integer> locationStatus = new HashMap<>();
             
-            // 初始化所有25个库位为0（空）
-            for (int i = 1; i <= 25; i++) {
+            // 初始化所有24个库位为0（空） - 4行6列
+            for (int i = 1; i <= 24; i++) {
                 locationStatus.put("location" + i, 0);
             }
             
-            // 根据MySQL数据更新库位状态
+            // 根据MySQL数据更新库位状态 - 按行列顺序排列
+            System.out.println("DEBUG: 开始处理库位状态，总共" + locations.size() + "个库位");
+            
+            // 创建一个按行列排序的库位映射
+            Map<String, WarehouseLocation> locationMap = new HashMap<>();
             for (WarehouseLocation location : locations) {
-                int positionIndex = (location.getRowNumber() - 1) * 6 + location.getColumnNumber();
-                if (positionIndex >= 1 && positionIndex <= 25) {
-                    locationStatus.put("location" + positionIndex, location.getHasPallet() ? 1 : 0);
+                String key = location.getRowNumber() + "-" + location.getColumnNumber();
+                locationMap.put(key, location);
+            }
+            
+            // 按4行6列的顺序遍历并设置库位状态
+            for (int row = 1; row <= 4; row++) {
+                for (int col = 1; col <= 6; col++) {
+                    int positionIndex = (row - 1) * 6 + col;
+                    String key = row + "-" + col;
+                    WarehouseLocation location = locationMap.get(key);
+                    
+                    if (location != null) {
+                        locationStatus.put("location" + positionIndex, location.getHasPallet() ? 1 : 0);
+                        System.out.println("DEBUG: 库位位置 - 行:" + row + 
+                                         ", 列:" + col + 
+                                         ", 索引:" + positionIndex + 
+                                         ", 有托盘:" + location.getHasPallet());
+                    } else {
+                        System.out.println("DEBUG: 库位位置缺失 - 行:" + row + ", 列:" + col + ", 索引:" + positionIndex);
+                        locationStatus.put("location" + positionIndex, 0);
+                    }
                 }
+            }
+            
+            // 输出最终的库位状态映射
+            System.out.println("DEBUG: 最终库位状态映射:");
+            for (int i = 1; i <= 24; i++) {
+                System.out.println("location" + i + " = " + locationStatus.get("location" + i));
             }
             
             status.put("locationStatus", locationStatus);
@@ -397,13 +445,6 @@ public class MesWmsIntegrationService {
         }
         
         return status;
-    }
-    
-    /**
-     * 检查Modbus连接状态
-     */
-    public boolean isModbusConnected() {
-        return modbusService.isConnected();
     }
     
     /**

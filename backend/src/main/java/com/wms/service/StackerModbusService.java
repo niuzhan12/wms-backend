@@ -26,11 +26,19 @@ public class StackerModbusService {
     @Value("${stacker.slaveId:1}")
     private int stackerSlaveId;
     
-    @Value("${stacker.timeout:5000}")
+    @Value("${stacker.timeout:10000}")
     private int timeout;
+    
+    @Value("${stacker.retries:3}")
+    private int retries;
+    
+    @Value("${stacker.heartbeat.interval:30000}")
+    private int heartbeatInterval;
     
     private TCPMasterConnection connection;
     private boolean connected = false;
+    private volatile boolean isConnecting = false;
+    private long lastHeartbeat = 0;
     
     // 堆垛机Modbus寄存器地址定义
     // WMS -> 堆垛机寄存器 (4001-4010)
@@ -45,28 +53,91 @@ public class StackerModbusService {
     public static final int WMS_ORDER_ROW = 4009;            // WMS下单行 (0=空闲, 实际行)
     public static final int WMS_ORDER_COLUMN = 4010;         // WMS下单列 (0=空闲, 实际列)
     
-    // 堆垛机 -> WMS寄存器 (5011-5035)
-    public static final int STACKER_TO_WMS_STATUS = 5011;    // 堆垛机状态反馈
-    public static final int STACKER_TO_WMS_OPERATION = 5012; // 操作类型反馈
-    public static final int STACKER_TO_WMS_ROW = 5013;       // 当前行反馈
-    public static final int STACKER_TO_WMS_COLUMN = 5014;    // 当前列反馈
-    public static final int STACKER_TO_WMS_PROGRESS = 5015;  // 进度反馈
-    public static final int STACKER_TO_WMS_COMPLETE = 5016;  // 完成反馈
-    public static final int STACKER_TO_WMS_ERROR = 5017;     // 错误反馈
+    // 注意：我们直接使用4001-4010寄存器，不需要额外的反馈寄存器
+    // 堆垛机状态通过4002寄存器直接反馈给WMS
     
     @PostConstruct
     public void initConnection() {
-        try {
-            connection = new TCPMasterConnection(InetAddress.getByName(stackerIp));
-            connection.setPort(stackerPort);
-            connection.setTimeout(timeout);
-            connection.connect();
-            connected = true;
-            System.out.println("堆垛机Modbus连接已建立: " + stackerIp + ":" + stackerPort);
-        } catch (Exception e) {
-            System.err.println("堆垛机Modbus连接失败: " + e.getMessage());
-            connected = false;
+        connectWithRetry();
+        startHeartbeat();
+    }
+    
+    /**
+     * 带重试的连接方法
+     */
+    private void connectWithRetry() {
+        if (isConnecting) {
+            return; // 避免重复连接
         }
+        
+        isConnecting = true;
+        int attempts = 0;
+        
+        while (attempts < retries) {
+            try {
+                if (connection != null && connection.isConnected()) {
+                    connection.close();
+                }
+                
+                connection = new TCPMasterConnection(InetAddress.getByName(stackerIp));
+                connection.setPort(stackerPort);
+                connection.setTimeout(timeout);
+                connection.connect();
+                
+                connected = true;
+                lastHeartbeat = System.currentTimeMillis();
+                System.out.println("堆垛机Modbus连接已建立: " + stackerIp + ":" + stackerPort + " (尝试次数: " + (attempts + 1) + ")");
+                break;
+                
+            } catch (Exception e) {
+                attempts++;
+                connected = false;
+                System.err.println("堆垛机Modbus连接失败 (尝试 " + attempts + "/" + retries + "): " + e.getMessage());
+                
+                if (attempts < retries) {
+                    try {
+                        Thread.sleep(2000); // 等待2秒后重试
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+        
+        isConnecting = false;
+    }
+    
+    /**
+     * 启动连接监控（不自动重连）
+     */
+    private void startHeartbeat() {
+        Thread heartbeatThread = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(heartbeatInterval);
+                    
+                    // 只监控连接状态，不自动重连
+                    if (isConnected()) {
+                        try {
+                            // 简单的连接验证，不执行实际读取操作
+                            lastHeartbeat = System.currentTimeMillis();
+                        } catch (Exception e) {
+                            System.err.println("堆垛机连接验证失败: " + e.getMessage());
+                        }
+                    } else {
+                        System.out.println("堆垛机连接已断开，等待手动重连");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        });
+        
+        heartbeatThread.setDaemon(true);
+        heartbeatThread.setName("StackerModbus-Monitor");
+        heartbeatThread.start();
     }
     
     @PreDestroy
@@ -170,7 +241,21 @@ public class StackerModbusService {
      */
     public int getStackerStatus() {
         try {
-            return readSingleRegister(STACKER_TO_WMS_STATUS);
+            // 直接读取堆垛机状态寄存器 (4002)
+            int stackerStatus = readSingleRegister(STACKER_STATUS);
+            
+            // 如果状态寄存器为0，但正在进行操作，则返回忙碌状态
+            if (stackerStatus == 0) {
+                int inboundProgress = readSingleRegister(STACKER_INBOUND_PROGRESS);
+                int outboundProgress = readSingleRegister(STACKER_OUTBOUND_PROGRESS);
+                
+                // 如果有进行中的操作，返回忙碌状态
+                if (inboundProgress == 1 || outboundProgress == 1) {
+                    return 1; // 忙碌
+                }
+            }
+            
+            return stackerStatus;
         } catch (Exception e) {
             System.err.println("读取堆垛机状态失败: " + e.getMessage());
             return 0;
@@ -216,7 +301,16 @@ public class StackerModbusService {
             // 根据操作状态返回进度
             int inboundProgress = readSingleRegister(STACKER_INBOUND_PROGRESS);
             int outboundProgress = readSingleRegister(STACKER_OUTBOUND_PROGRESS);
+            
             if (inboundProgress == 1 || outboundProgress == 1) {
+                // 检查是否有完成标志
+                int inboundComplete = readSingleRegister(STACKER_INBOUND_COMPLETE);
+                int outboundComplete = readSingleRegister(STACKER_OUTBOUND_COMPLETE);
+                
+                if (inboundComplete == 1 || outboundComplete == 1) {
+                    return 100; // 已完成
+                }
+                
                 return 50; // 假设进行中为50%
             }
             return 0;
@@ -272,9 +366,17 @@ public class StackerModbusService {
      */
     public void stopStackerOperation() {
         try {
+            // 清除进度寄存器
             writeSingleRegister(STACKER_INBOUND_PROGRESS, 0);
             writeSingleRegister(STACKER_OUTBOUND_PROGRESS, 0);
-            writeSingleRegister(STACKER_STATUS, 0); // 设置为空闲状态
+            // 清除完成寄存器
+            writeSingleRegister(STACKER_INBOUND_COMPLETE, 0);
+            writeSingleRegister(STACKER_OUTBOUND_COMPLETE, 0);
+            // 清除位置信息
+            writeSingleRegister(WMS_ORDER_ROW, 0);
+            writeSingleRegister(WMS_ORDER_COLUMN, 0);
+            // 设置为空闲状态
+            writeSingleRegister(STACKER_STATUS, 0);
             System.out.println("已停止堆垛机操作");
         } catch (Exception e) {
             System.err.println("停止堆垛机操作失败: " + e.getMessage());

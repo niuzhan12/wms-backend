@@ -128,16 +128,55 @@ public class StackerMonitorController {
     }
     
     /**
+     * 清理所有状态（紧急重置）
+     */
+    @PostMapping("/clear-all-status")
+    public ResponseEntity<Map<String, Object>> clearAllStatus() {
+        try {
+            System.out.println("DEBUG: 开始清理所有状态...");
+            
+            // 清理所有状态
+            wmsStackerIntegrationService.forceResetAllStatus();
+            System.out.println("DEBUG: 所有状态已清理");
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "所有状态已清理完成");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.err.println("清理状态异常: " + e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+    
+    /**
      * 连接WMS-堆垛机 Modbus
      */
     @PostMapping("/connect")
     public ResponseEntity<Map<String, Object>> connect(@RequestBody Map<String, Object> request) {
         try {
+            // 获取连接参数（用于日志记录）
             String host = (String) request.get("host");
             Integer port = (Integer) request.get("port");
             Integer slaveId = (Integer) request.get("slaveId");
             
-            // 这里可以添加连接逻辑，目前直接返回成功
+            System.out.println("WMS-堆垛机连接请求: " + host + ":" + port + " (从站ID:" + slaveId + ")");
+            
+            // 检查是否已经连接
+            Map<String, Object> currentStatus = wmsStackerIntegrationService.getWmsStackerStatus();
+            if ((Boolean) currentStatus.get("connected")) {
+                Map<String, Object> result = new HashMap<>();
+                result.put("success", true);
+                result.put("message", "WMS-堆垛机 Modbus已连接");
+                result.put("connected", true);
+                return ResponseEntity.ok(result);
+            }
+            
+            // 尝试建立连接
+            // 这里可以添加实际的连接逻辑，目前直接返回成功
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("message", "WMS-堆垛机 Modbus连接成功");

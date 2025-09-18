@@ -14,6 +14,9 @@
             <el-button type="info" @click="checkCompletion">
               检查完成状态
             </el-button>
+            <el-button type="danger" @click="clearAllStatus" :loading="clearing">
+              清理所有状态
+            </el-button>
           </div>
         </div>
       </template>
@@ -26,7 +29,8 @@
             <el-card class="status-card">
               <div class="status-item">
                 <span class="status-label">Modbus连接:</span>
-                <el-tag :type="status.connected ? 'success' : 'danger'">
+                <el-tag v-if="loading" type="info">检查中...</el-tag>
+                <el-tag v-else :type="status.connected ? 'success' : 'danger'">
                   {{ status.connected ? '已连接' : '未连接' }}
                 </el-tag>
               </div>
@@ -132,14 +136,6 @@
               </div>
             </el-card>
           </el-col>
-          <el-col :span="6">
-            <el-card class="status-card">
-              <div class="status-item">
-                <span class="status-label">进度:</span>
-                <el-progress :percentage="status.stackerProgress || 0" :show-text="true" />
-              </div>
-            </el-card>
-          </el-col>
         </el-row>
       </div>
 
@@ -170,27 +166,6 @@
         </el-row>
       </div>
 
-      <!-- 库位状态 -->
-      <div class="status-section">
-        <h3>库位状态</h3>
-        <div class="warehouse-grid">
-          <div 
-            v-for="(hasPallet, location) in status.locationStatus" 
-            :key="location"
-            class="warehouse-location"
-            :class="{ 'has-pallet': hasPallet, 'empty': !hasPallet }"
-          >
-            <div class="location-info">
-              <div class="location-name">{{ location }}</div>
-              <div class="location-status">
-                <el-tag :type="hasPallet ? 'success' : 'info'" size="small">
-                  {{ hasPallet ? '有托盘' : '空' }}
-                </el-tag>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <!-- 操作日志 -->
       <div class="status-section">
@@ -231,13 +206,15 @@ export default {
       stackerProgress: 0,
       stackerComplete: 0,
       mesOutboundOrder: 0,
-      mesInboundOrder: 0,
-      locationStatus: {}
+      mesInboundOrder: 0
     })
+
+    const loading = ref(false)
 
     const logs = ref([])
     const initializing = ref(false)
     const resetting = ref(false)
+    const clearing = ref(false)
     let monitoringInterval = null
 
     // 添加日志
@@ -250,9 +227,30 @@ export default {
       }
     }
 
-    // 获取状态
-    const getStatus = async () => {
+    // 从后端获取操作日志
+    const loadOperationLogs = async () => {
       try {
+        const response = await fetch('/api/logs/mes-wms?page=0&size=20')
+        const data = await response.json()
+        
+        if (data.content) {
+          logs.value = data.content.map(log => ({
+            time: new Date(log.timestamp).toLocaleTimeString(),
+            message: `[${log.level}] ${log.message}`,
+            level: log.level
+          }))
+        }
+      } catch (error) {
+        console.error('获取操作日志失败:', error)
+      }
+    }
+
+    // 获取状态
+    const getStatus = async (showLoading = false) => {
+      try {
+        if (showLoading) {
+          loading.value = true
+        }
         const response = await fetch('/api/stacker-monitor/status')
         const data = await response.json()
         
@@ -261,9 +259,16 @@ export default {
         if (data.error) {
           addLog(`错误: ${data.error}`)
         }
+        
+        // 同时加载操作日志
+        await loadOperationLogs()
       } catch (error) {
         console.error('获取状态失败:', error)
         addLog(`获取状态失败: ${error.message}`)
+      } finally {
+        if (showLoading) {
+          loading.value = false
+        }
       }
     }
 
@@ -336,6 +341,33 @@ export default {
       }
     }
 
+    // 清理所有状态
+    const clearAllStatus = async () => {
+      clearing.value = true
+      try {
+        const response = await fetch('/api/stacker-monitor/clear-all-status', {
+          method: 'POST'
+        })
+        const data = await response.json()
+        
+        if (data.success) {
+          ElMessage.success('所有状态已清理完成')
+          addLog('所有状态已清理完成')
+          // 刷新状态
+          await getStatus()
+        } else {
+          ElMessage.error('清理状态失败: ' + data.error)
+          addLog('清理状态失败: ' + data.error)
+        }
+      } catch (error) {
+        console.error('清理状态失败:', error)
+        ElMessage.error('清理状态失败: ' + error.message)
+        addLog('清理状态失败: ' + error.message)
+      } finally {
+        clearing.value = false
+      }
+    }
+
     // 获取堆垛机状态类型
     const getStackerStatusType = (status) => {
       switch (status) {
@@ -378,8 +410,7 @@ export default {
 
     // 开始监控
     const startMonitoring = () => {
-      getStatus()
-      monitoringInterval = setInterval(getStatus, 2000)
+      monitoringInterval = setInterval(() => getStatus(false), 2000)
       addLog('开始监控WMS-堆垛机状态')
     }
 
@@ -392,7 +423,9 @@ export default {
       }
     }
 
-    onMounted(() => {
+    onMounted(async () => {
+      // 立即获取状态，避免显示"未连接"的闪烁，首次加载时显示加载状态
+      await getStatus(true)
       startMonitoring()
     })
 
@@ -403,11 +436,14 @@ export default {
     return {
       status,
       logs,
+      loading,
       initializing,
       resetting,
+      clearing,
       initializeFlow,
       forceResetAll,
       checkCompletion,
+      clearAllStatus,
       getStackerStatusType,
       getStackerStatusText,
       getOperationType,
@@ -469,43 +505,6 @@ export default {
   font-weight: bold;
 }
 
-.warehouse-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 10px;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.warehouse-location {
-  border: 2px solid #DCDFE6;
-  border-radius: 8px;
-  padding: 10px;
-  text-align: center;
-  transition: all 0.3s;
-  cursor: pointer;
-}
-
-.warehouse-location.has-pallet {
-  border-color: #67C23A;
-  background-color: #F0F9FF;
-}
-
-.warehouse-location.empty {
-  border-color: #909399;
-  background-color: #F5F7FA;
-}
-
-.location-info {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.location-name {
-  font-weight: bold;
-  color: #303133;
-}
 
 .log-card {
   max-height: 300px;

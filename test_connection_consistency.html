@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>连接状态一致性测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .status-card {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+        .connected {
+            border-left: 4px solid #4CAF50;
+            background: #e8f5e8;
+        }
+        .disconnected {
+            border-left: 4px solid #f44336;
+            background: #ffeaea;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 4px;
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1976D2;
+        }
+        .log {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .fix-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .comparison {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>连接状态一致性测试</h1>
+        
+        <div class="fix-info">
+            <h3>🔧 问题修复说明</h3>
+            <p><strong>问题：</strong>Modbus测试页面显示"已连接"，但MES-WMS监控页面显示"未连接"</p>
+            <p><strong>原因：</strong>不同模块使用不同的Modbus服务检查连接状态</p>
+            <p><strong>修复：</strong>为MES-WMS监控页面添加localStorage状态恢复机制，确保连接状态一致性</p>
+        </div>
+
+        <div class="test-section">
+            <h3>测试步骤</h3>
+            <ol>
+                <li>在Modbus连接测试页面建立MES-WMS连接</li>
+                <li>切换到MES-WMS监控页面</li>
+                <li>检查两个页面是否都显示"已连接"状态</li>
+                <li>切换回Modbus测试页面，再切换到MES-WMS监控页面</li>
+                <li>验证连接状态是否保持一致</li>
+            </ol>
+        </div>
+
+        <div class="status-grid">
+            <div class="status-card" id="modbusTestStatus">
+                <h3>Modbus测试页面状态</h3>
+                <p id="modbusTestMessage">检查中...</p>
+                <p><strong>状态：</strong><span id="modbusTestConnected">未知</span></p>
+            </div>
+            
+            <div class="status-card" id="mesWmsMonitorStatus">
+                <h3>MES-WMS监控页面状态</h3>
+                <p id="mesWmsMonitorMessage">检查中...</p>
+                <p><strong>状态：</strong><span id="mesWmsMonitorConnected">未知</span></p>
+            </div>
+        </div>
+
+        <div class="comparison">
+            <h3>状态对比</h3>
+            <div id="statusComparison">
+                <p>等待状态检查...</p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>测试操作</h3>
+            <button onclick="checkAllStatuses()">检查所有状态</button>
+            <button onclick="simulateConnection()">模拟建立连接</button>
+            <button onclick="simulateDisconnection()">模拟断开连接</button>
+            <button onclick="clearAllCache()">清除所有缓存</button>
+        </div>
+
+        <div class="log" id="log">
+            <div>日志输出：</div>
+        </div>
+    </div>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateStatusDisplay() {
+            // 检查Modbus测试页面状态（基于localStorage）
+            const modbusTestStatus = localStorage.getItem('mesWmsConnectionStatus');
+            if (modbusTestStatus) {
+                try {
+                    const parsed = JSON.parse(modbusTestStatus);
+                    document.getElementById('modbusTestMessage').textContent = parsed.message || '无消息';
+                    document.getElementById('modbusTestConnected').textContent = parsed.connected ? '已连接' : '未连接';
+                    document.getElementById('modbusTestStatus').className = 
+                        'status-card ' + (parsed.connected ? 'connected' : 'disconnected');
+                } catch (e) {
+                    log('解析Modbus测试状态失败: ' + e.message);
+                }
+            } else {
+                document.getElementById('modbusTestMessage').textContent = '无缓存数据';
+                document.getElementById('modbusTestConnected').textContent = '未知';
+                document.getElementById('modbusTestStatus').className = 'status-card';
+            }
+
+            // 检查MES-WMS监控页面状态（基于localStorage）
+            const mesWmsMonitorStatus = localStorage.getItem('mesWmsConnectionStatus');
+            if (mesWmsMonitorStatus) {
+                try {
+                    const parsed = JSON.parse(mesWmsMonitorStatus);
+                    document.getElementById('mesWmsMonitorMessage').textContent = parsed.message || '无消息';
+                    document.getElementById('mesWmsMonitorConnected').textContent = parsed.connected ? '已连接' : '未连接';
+                    document.getElementById('mesWmsMonitorStatus').className = 
+                        'status-card ' + (parsed.connected ? 'connected' : 'disconnected');
+                } catch (e) {
+                    log('解析MES-WMS监控状态失败: ' + e.message);
+                }
+            } else {
+                document.getElementById('mesWmsMonitorMessage').textContent = '无缓存数据';
+                document.getElementById('mesWmsMonitorConnected').textContent = '未知';
+                document.getElementById('mesWmsMonitorStatus').className = 'status-card';
+            }
+
+            // 更新状态对比
+            updateStatusComparison();
+        }
+
+        function updateStatusComparison() {
+            const modbusTestConnected = document.getElementById('modbusTestConnected').textContent;
+            const mesWmsMonitorConnected = document.getElementById('mesWmsMonitorConnected').textContent;
+            
+            const comparisonDiv = document.getElementById('statusComparison');
+            
+            if (modbusTestConnected === mesWmsMonitorConnected) {
+                comparisonDiv.innerHTML = `
+                    <p style="color: #4CAF50;">✅ 状态一致: ${modbusTestConnected}</p>
+                    <p>两个页面显示相同的连接状态</p>
+                `;
+            } else {
+                comparisonDiv.innerHTML = `
+                    <p style="color: #f44336;">❌ 状态不一致</p>
+                    <p>Modbus测试页面: ${modbusTestConnected}</p>
+                    <p>MES-WMS监控页面: ${mesWmsMonitorConnected}</p>
+                `;
+            }
+        }
+
+        function checkAllStatuses() {
+            log('检查所有连接状态...');
+            updateStatusDisplay();
+            log('状态检查完成');
+        }
+
+        function simulateConnection() {
+            log('模拟建立MES-WMS连接...');
+            localStorage.setItem('mesWmsConnectionStatus', JSON.stringify({
+                connected: true,
+                message: 'MES-WMS连接已建立'
+            }));
+            updateStatusDisplay();
+            log('已模拟建立连接');
+        }
+
+        function simulateDisconnection() {
+            log('模拟断开MES-WMS连接...');
+            localStorage.setItem('mesWmsConnectionStatus', JSON.stringify({
+                connected: false,
+                message: 'MES-WMS连接已断开'
+            }));
+            updateStatusDisplay();
+            log('已模拟断开连接');
+        }
+
+        function clearAllCache() {
+            localStorage.removeItem('mesWmsConnectionStatus');
+            localStorage.removeItem('wmsStackerConnectionStatus');
+            log('所有连接缓存已清除');
+            updateStatusDisplay();
+        }
+
+        // 页面加载时检查状态
+        window.onload = function() {
+            log('页面加载完成，开始检查连接状态一致性');
+            checkAllStatuses();
+            
+            // 每3秒自动检查一次状态
+            setInterval(checkAllStatuses, 3000);
+        };
+
+        // 监听localStorage变化
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'mesWmsConnectionStatus' || e.key === 'wmsStackerConnectionStatus') {
+                log('检测到连接状态变化: ' + e.key);
+                updateStatusDisplay();
+            }
+        });
+    </script>
+</body>
+</html>

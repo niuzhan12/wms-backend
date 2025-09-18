@@ -30,11 +30,18 @@ modbus:
   host: 127.0.0.1
   port: 502
   slaveId: 1
+  timeout: 10000
+  retries: 3
+  heartbeat:
+    interval: 30000
 
 # 堆垛机配置 (WMS作为Modbus Master连接堆垛机)
 stacker:
   ip: 127.0.0.1
   port: 503
   slaveId: 1
-  timeout: 5000
+  timeout: 10000
+  retries: 3
+  heartbeat:
+    interval: 30000
 
