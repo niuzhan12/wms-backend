@@ -448,7 +448,7 @@ public class WmsStackerIntegrationService {
                 System.out.println("DEBUG: 开始模拟堆垛机操作 - 类型:" + operation + ", 时间:" + currentTime);
                 operationLogService.saveMesWmsLog("INFO", 
                     "堆垛机开始执行" + (operation == OPERATION_OUTBOUND ? "出库" : "入库") + "操作", 
-                    "堆垛机操作");
+                    operation == OPERATION_OUTBOUND ? "出库流程" : "入库流程");
                 return;
             }
             
@@ -458,11 +458,11 @@ public class WmsStackerIntegrationService {
                 if (operation == OPERATION_OUTBOUND) {
                     stackerModbusService.writeSingleRegister(StackerModbusService.STACKER_OUTBOUND_COMPLETE, 1);
                     System.out.println("DEBUG: 模拟堆垛机出库完成");
-                    operationLogService.saveMesWmsLog("SUCCESS", "堆垛机出库操作完成", "堆垛机操作");
+                    operationLogService.saveMesWmsLog("SUCCESS", "堆垛机出库操作完成", "出库流程");
                 } else if (operation == OPERATION_INBOUND) {
                     stackerModbusService.writeSingleRegister(StackerModbusService.STACKER_INBOUND_COMPLETE, 1);
                     System.out.println("DEBUG: 模拟堆垛机入库完成");
-                    operationLogService.saveMesWmsLog("SUCCESS", "堆垛机入库操作完成", "堆垛机操作");
+                    operationLogService.saveMesWmsLog("SUCCESS", "堆垛机入库操作完成", "入库流程");
                 }
                 
                 // 重置操作状态
@@ -551,6 +551,9 @@ public class WmsStackerIntegrationService {
                     
                 } else if (stackerOperation == OPERATION_INBOUND) {
                     System.out.println("DEBUG: 步骤6 - 堆垛机入库完成，通知WMS");
+                    operationLogService.saveMesWmsLog("INFO", 
+                        String.format("步骤6: 堆垛机入库完成，位置 %d行%d列，通知WMS", row, col), 
+                        "入库流程");
                     // 入库完成 -> 更新库位为有托盘
                     locationRepository.findByWarehouseCodeOrderByRowNumberAscColumnNumberAsc("A")
                         .stream()
@@ -565,12 +568,14 @@ public class WmsStackerIntegrationService {
                         });
                     
                     System.out.println("DEBUG: 步骤7 - WMS接收堆垛机完成信号，清除WMS状态");
+                    operationLogService.saveMesWmsLog("INFO", "步骤7: WMS接收堆垛机完成信号，清除WMS状态", "入库流程");
                     // WMS接收堆垛机完成信号，清除WMS状态
                     modbusService.writeSingleRegister(MesWmsIntegrationService.WMS_INBOUND_PROGRESS, 0);
                     modbusService.writeSingleRegister(MesWmsIntegrationService.WMS_INBOUND_COMPLETE, 1);
                     modbusService.writeSingleRegister(MesWmsIntegrationService.WMS_BUSY, 0);
                     
                     System.out.println("DEBUG: 步骤8 - WMS通知MES入库完成，清除MES订单");
+                    operationLogService.saveMesWmsLog("INFO", "步骤8: WMS通知MES入库完成，清除MES订单", "入库流程");
                     // WMS通知MES入库完成，清除MES订单
                     modbusService.writeSingleRegister(MesWmsIntegrationService.MES_INBOUND_ORDER, 0);
                     

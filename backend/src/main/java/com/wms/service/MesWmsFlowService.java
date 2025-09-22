@@ -326,38 +326,55 @@ public class MesWmsFlowService {
     private Map<String, Object> executeInboundFlow() {
         Map<String, Object> result = new HashMap<>();
         
+        System.out.println("DEBUG: 步骤1 - WMS接收MES入库信号，设置WMS为忙状态");
+        operationLogService.saveMesWmsLog("INFO", "步骤1: WMS接收MES入库信号，设置WMS为忙状态", "入库流程");
+        
         try {
-            // 1. 设置WMS忙碌状态 (4002 = 1)
+            // 1. WMS接收MES信号 → WMS状态变为"忙"
             modbusService.writeSingleRegister(WMS_BUSY, 1);
-            // 2. 设置WMS入库中状态 (4004 = 1)
+            // 2. 设置WMS入库中状态
             modbusService.writeSingleRegister(WMS_INBOUND_PROGRESS, 1);
+            operationLogService.saveMesWmsLog("INFO", "WMS状态已设置为忙碌，入库进度已启动", "入库流程");
             
-            // 2. 执行入库操作
+            System.out.println("DEBUG: 步骤2 - WMS查找空闲的库位");
+            operationLogService.saveMesWmsLog("INFO", "步骤2: WMS开始查找空闲的库位", "入库流程");
+            // 3. 执行入库操作
             List<WarehouseLocation> locations = locationRepository.findByWarehouseCodeOrderByRowNumberAscColumnNumberAsc("A");
             
             for (WarehouseLocation location : locations) {
                 if (!location.getHasPallet()) {
-                    // 3. 设置当前执行的行列 (4009/4010)
+                    System.out.println("DEBUG: 步骤3 - 找到目标位置: " + location.getRowNumber() + "行" + location.getColumnNumber() + "列");
+                    operationLogService.saveMesWmsLog("INFO", 
+                        String.format("步骤3: 找到目标位置 %d行%d列", location.getRowNumber(), location.getColumnNumber()), 
+                        "入库流程");
+                    // 4. 设置当前执行的行列
                     modbusService.writeSingleRegister(WMS_CURRENT_ROW, location.getRowNumber());
                     modbusService.writeSingleRegister(WMS_CURRENT_COLUMN, location.getColumnNumber());
-                    
-                    // 记录开始执行日志
                     operationLogService.saveMesWmsLog("INFO", 
-                        String.format("开始执行入库 - 位置: %d行%d列", location.getRowNumber(), location.getColumnNumber()), 
+                        String.format("已设置当前位置为 %d行%d列", location.getRowNumber(), location.getColumnNumber()), 
                         "入库流程");
                     
-                    // 通过堆垛机执行入库操作（WMS只下发指令，不直接操作库位）
+                    System.out.println("DEBUG: 步骤4 - WMS下发指令给堆垛机");
+                    operationLogService.saveMesWmsLog("INFO", "步骤4: WMS开始下发指令给堆垛机", "入库流程");
+                    
+                    // 5. 给堆垛机发送入库指令（不等待完成）
                     Map<String, Object> stackerResult = wmsStackerIntegrationService.sendInboundCommand(
                         location.getRowNumber(), location.getColumnNumber());
                     
                     if (!(Boolean) stackerResult.get("success")) {
+                        operationLogService.saveMesWmsLog("ERROR", 
+                            "下发入库指令到堆垛机失败: " + stackerResult.get("message"), 
+                            "入库流程");
                         result.put("success", false);
                         result.put("message", "下发入库指令到堆垛机失败: " + stackerResult.get("message"));
                         return result;
                     }
                     
-                    // WMS不直接操作库位，等待堆垛机完成后再更新
-                    System.out.println("DEBUG: 入库指令已下发到堆垛机，等待堆垛机完成");
+                    System.out.println("DEBUG: 步骤5 - 入库指令已下发到堆垛机，等待堆垛机完成");
+                    operationLogService.saveMesWmsLog("INFO", 
+                        String.format("步骤5: 入库指令已下发到堆垛机，目标位置 %d行%d列，等待堆垛机完成", 
+                                    location.getRowNumber(), location.getColumnNumber()), 
+                        "入库流程");
                     
                     result.put("success", true);
                     result.put("message", "入库指令已下发到堆垛机，等待堆垛机完成");
@@ -375,6 +392,8 @@ public class MesWmsFlowService {
             modbusService.writeSingleRegister(WMS_BUSY, 0);
             // 清除MES入库订单 (4008 = 0) - WMS主动清除
             modbusService.writeSingleRegister(MES_INBOUND_ORDER, 0);
+            
+            operationLogService.saveMesWmsLog("WARNING", "入库流程执行失败 - 没有找到空闲的库位", "入库流程");
             
             result.put("success", false);
             result.put("message", "没有找到空闲的库位");

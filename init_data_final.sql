@@ -137,3 +137,5 @@ INSERT INTO device_status (status, current_row, current_col, control_mode, wareh
 
 
 
+
+

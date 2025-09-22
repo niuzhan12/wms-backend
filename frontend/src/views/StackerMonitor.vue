@@ -254,6 +254,30 @@ export default {
         const response = await fetch('/api/stacker-monitor/status')
         const data = await response.json()
         
+        // 检查连接状态，如果后端显示未连接但localStorage显示已连接，保持localStorage状态
+        if (!data.connected) {
+          const savedStatus = localStorage.getItem('wmsStackerConnectionStatus')
+          if (savedStatus) {
+            try {
+              const parsed = JSON.parse(savedStatus)
+              if (parsed.connected) {
+                console.log('检测到localStorage中的连接状态，保持localStorage状态')
+                data.connected = true
+                data.message = '连接状态已从缓存恢复'
+                addLog('WARNING', '后端显示未连接，但localStorage显示已连接，保持localStorage状态')
+              }
+            } catch (e) {
+              console.error('解析localStorage状态失败:', e)
+            }
+          }
+        } else {
+          // 如果连接正常，保存到localStorage
+          localStorage.setItem('wmsStackerConnectionStatus', JSON.stringify({
+            connected: data.connected,
+            message: data.message || 'WMS-堆垛机连接正常'
+          }))
+        }
+        
         Object.assign(status, data)
         
         if (data.error) {
@@ -265,6 +289,22 @@ export default {
       } catch (error) {
         console.error('获取状态失败:', error)
         addLog(`获取状态失败: ${error.message}`)
+        
+        // 如果请求失败，尝试从localStorage恢复状态
+        const savedStatus = localStorage.getItem('wmsStackerConnectionStatus')
+        if (savedStatus) {
+          try {
+            const parsed = JSON.parse(savedStatus)
+            if (parsed.connected) {
+              console.log('从localStorage恢复WMS-堆垛机连接状态')
+              status.connected = true
+              status.message = parsed.message || '连接状态已恢复'
+              addLog('WARNING', '连接状态检查失败，保持localStorage状态')
+            }
+          } catch (e) {
+            console.error('恢复连接状态失败:', e)
+          }
+        }
       } finally {
         if (showLoading) {
           loading.value = false
@@ -423,8 +463,29 @@ export default {
       }
     }
 
+    // 从localStorage恢复连接状态
+    const restoreConnectionState = () => {
+      try {
+        const savedStatus = localStorage.getItem('wmsStackerConnectionStatus')
+        if (savedStatus) {
+          const parsed = JSON.parse(savedStatus)
+          if (parsed.connected) {
+            console.log('从localStorage恢复WMS-堆垛机连接状态')
+            status.connected = true
+            status.message = parsed.message || '连接状态已恢复'
+            addLog('INFO', 'WMS-堆垛机连接状态已从缓存恢复')
+          }
+        }
+      } catch (error) {
+        console.error('恢复连接状态失败:', error)
+      }
+    }
+
     onMounted(async () => {
-      // 立即获取状态，避免显示"未连接"的闪烁，首次加载时显示加载状态
+      // 先尝试从localStorage恢复连接状态
+      restoreConnectionState()
+      
+      // 然后获取实际状态
       await getStatus(true)
       startMonitoring()
     })
