@@ -11,6 +11,11 @@
       "src": "/(.*)",
       "dest": "/"
     }
-  ]
+  ],
+  "functions": {
+    "app": {
+      "maxDuration": 30
+    }
+  }
 }
 
