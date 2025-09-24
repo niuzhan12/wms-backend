@@ -1,0 +1,46 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: warehouse-management-system
+  
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:railway}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:your_password}
+  
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    com.wms: DEBUG
+    org.springframework.web: DEBUG
+
+# MES配置 (WMS作为Modbus Master连接MES)
+modbus:
+  host: ${MES_HOST:127.0.0.1}
+  port: ${MES_PORT:502}
+  slaveId: ${MES_SLAVE_ID:1}
+  timeout: 10000
+  retries: 3
+  heartbeat:
+    interval: 30000
+
+# 堆垛机配置 (WMS作为Modbus Master连接堆垛机)
+stacker:
+  ip: ${STACKER_IP:127.0.0.1}
+  port: ${STACKER_PORT:503}
+  slaveId: ${STACKER_SLAVE_ID:1}
+  timeout: 10000
+  retries: 3
+  heartbeat:
+    interval: 30000
