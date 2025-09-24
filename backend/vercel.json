@@ -16,6 +16,9 @@
     "app": {
       "maxDuration": 30
     }
-  }
+  },
+  "buildCommand": "",
+  "outputDirectory": "",
+  "installCommand": ""
 }
 
